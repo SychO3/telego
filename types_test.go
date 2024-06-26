@@ -25,6 +25,27 @@ func TestTypesInterfaces(t *testing.T) {
 	assert.Implements(t, (*MessageOrigin)(nil), &MessageOriginChannel{})
 	assert.Equal(t, OriginTypeChannel, (&MessageOriginChannel{}).OriginType())
 
+	assert.Implements(t, (*BackgroundFill)(nil), &BackgroundFillSolid{})
+	assert.Equal(t, BackgroundFilledSolid, (&BackgroundFillSolid{}).BackgroundFilled())
+
+	assert.Implements(t, (*BackgroundFill)(nil), &BackgroundFillGradient{})
+	assert.Equal(t, BackgroundFilledGradient, (&BackgroundFillGradient{}).BackgroundFilled())
+
+	assert.Implements(t, (*BackgroundFill)(nil), &BackgroundFillFreeformGradient{})
+	assert.Equal(t, BackgroundFilledFreeformGradient, (&BackgroundFillFreeformGradient{}).BackgroundFilled())
+
+	assert.Implements(t, (*BackgroundType)(nil), &BackgroundTypeFill{})
+	assert.Equal(t, BackgroundTypeNameFill, (&BackgroundTypeFill{}).BackgroundType())
+
+	assert.Implements(t, (*BackgroundType)(nil), &BackgroundTypeWallpaper{})
+	assert.Equal(t, BackgroundTypeNameWallpaper, (&BackgroundTypeWallpaper{}).BackgroundType())
+
+	assert.Implements(t, (*BackgroundType)(nil), &BackgroundTypePattern{})
+	assert.Equal(t, BackgroundTypeNamePattern, (&BackgroundTypePattern{}).BackgroundType())
+
+	assert.Implements(t, (*BackgroundType)(nil), &BackgroundTypeChatTheme{})
+	assert.Equal(t, BackgroundTypeNameChatTheme, (&BackgroundTypeChatTheme{}).BackgroundType())
+
 	assert.Implements(t, (*ReplyMarkup)(nil), &ReplyKeyboardMarkup{})
 	assert.Equal(t, MarkupTypeReplyKeyboard, (&ReplyKeyboardMarkup{}).ReplyType())
 
@@ -596,8 +617,8 @@ func TestTypesConstants(t *testing.T) {
 		{
 			EntityTypeMention, EntityTypeHashtag, EntityTypeCashtag, EntityTypeBotCommand, EntityTypeURL,
 			EntityTypeEmail, EntityTypePhoneNumber, EntityTypeBold, EntityTypeItalic, EntityTypeUnderline,
-			EntityTypeStrikethrough, EntityTypeSpoiler, EntityTypeBlockquote, EntityTypeCode, EntityTypePre,
-			EntityTypeTextLink, EntityTypeTextMention, EntityTypeCustomEmoji,
+			EntityTypeStrikethrough, EntityTypeSpoiler, EntityTypeBlockquote, EntityTypeExpandableBlockquote,
+			EntityTypeCode, EntityTypePre, EntityTypeTextLink, EntityTypeTextMention, EntityTypeCustomEmoji,
 		},
 		{
 			OriginTypeUser, OriginTypeHiddenUser, OriginTypeChat, OriginTypeChannel,
@@ -607,6 +628,12 @@ func TestTypesConstants(t *testing.T) {
 		},
 		{
 			PollTypeRegular, PollTypeQuiz,
+		},
+		{
+			BackgroundFilledSolid, BackgroundFilledGradient, BackgroundFilledFreeformGradient,
+		},
+		{
+			BackgroundTypeNameFill, BackgroundTypeNameWallpaper, BackgroundTypeNamePattern, BackgroundTypeNameChatTheme,
 		},
 		{
 			MarkupTypeReplyKeyboard, MarkupTypeReplyKeyboardRemove, MarkupTypeInlineKeyboard, MarkupTypeForceReply,
@@ -678,14 +705,7 @@ func TestUpdate_Clone(t *testing.T) {
 		Message: &Message{
 			Text: "ok",
 			Chat: Chat{
-				AvailableReactions: []ReactionType{
-					&ReactionTypeEmoji{
-						Type: ReactionEmoji,
-					},
-					&ReactionTypeCustomEmoji{
-						Type: ReactionCustomEmoji,
-					},
-				},
+				ID: 1,
 			},
 			Contact: &Contact{
 				PhoneNumber: "123",
@@ -721,7 +741,6 @@ func BenchmarkUpdate_Clone(b *testing.B) {
 	const n1 = 1
 	const s1 = "text"
 	const b1 = true
-	b2 := true
 
 	c1 := Chat{
 		ID:        n1,
@@ -730,44 +749,6 @@ func BenchmarkUpdate_Clone(b *testing.B) {
 		Username:  s1,
 		FirstName: s1,
 		LastName:  s1,
-		Photo: &ChatPhoto{
-			SmallFileID:       s1,
-			SmallFileUniqueID: s1,
-			BigFileID:         s1,
-			BigFileUniqueID:   s1,
-		},
-		Bio:                s1,
-		HasPrivateForwards: b1,
-		JoinToSendMessages: b1,
-		JoinByRequest:      b1,
-		Description:        s1,
-		InviteLink:         s1,
-		Permissions: &ChatPermissions{
-			CanSendMessages:       &b2,
-			CanSendPolls:          &b2,
-			CanSendOtherMessages:  &b2,
-			CanAddWebPagePreviews: &b2,
-			CanChangeInfo:         &b2,
-			CanInviteUsers:        &b2,
-			CanPinMessages:        &b2,
-		},
-		SlowModeDelay:         n1,
-		MessageAutoDeleteTime: n1,
-		HasProtectedContent:   b1,
-		StickerSetName:        s1,
-		CanSetStickerSet:      b1,
-		LinkedChatID:          n1,
-		Location: &ChatLocation{
-			Location: Location{
-				Longitude:            n1,
-				Latitude:             n1,
-				HorizontalAccuracy:   n1,
-				LivePeriod:           n1,
-				Heading:              n1,
-				ProximityAlertRadius: n1,
-			},
-			Address: s1,
-		},
 	}
 
 	u1 := User{
@@ -966,17 +947,17 @@ func TestUpdate_Context(t *testing.T) {
 	})
 }
 
-func Test_Chat_UnmarshalJSON(t *testing.T) {
+func Test_ChatFullInfo_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		json    string
-		data    *Chat
+		data    *ChatFullInfo
 		isError bool
 	}{
 		{
 			name: "success",
 			json: `{"id": 1}`,
-			data: &Chat{
+			data: &ChatFullInfo{
 				ID: 1,
 			},
 			isError: false,
@@ -996,7 +977,7 @@ func Test_Chat_UnmarshalJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &Chat{}
+			c := &ChatFullInfo{}
 			err := c.UnmarshalJSON([]byte(tt.json))
 			if tt.isError {
 				require.Error(t, err)
@@ -1304,6 +1285,107 @@ func Test_ChatBoostRemoved_UnmarshalJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &ChatBoostRemoved{}
+			err := c.UnmarshalJSON([]byte(tt.json))
+			if tt.isError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.EqualValues(t, tt.data, c)
+		})
+	}
+}
+
+func Test_BackgroundTypeFill_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		data    *BackgroundTypeFill
+		isError bool
+	}{
+		{
+			name: "success",
+			json: `{"type": "fill", "fill": {"type": "solid"}}`,
+			data: &BackgroundTypeFill{
+				Type: BackgroundTypeNameFill,
+				Fill: &BackgroundFillSolid{
+					Type: BackgroundFilledSolid,
+				},
+			},
+			isError: false,
+		},
+		{
+			name:    "error_invalid",
+			json:    "",
+			data:    nil,
+			isError: true,
+		},
+		{
+			name:    "error_no_fill",
+			json:    `{}`,
+			data:    nil,
+			isError: true,
+		},
+		{
+			name:    "error_invalid_fill",
+			json:    `{"fill": {"type": ""}`,
+			data:    nil,
+			isError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &BackgroundTypeFill{}
+			err := c.UnmarshalJSON([]byte(tt.json))
+			if tt.isError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.EqualValues(t, tt.data, c)
+		})
+	}
+}
+
+func Test_ChatBackground_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		data    *ChatBackground
+		isError bool
+	}{
+		{
+			name: "success",
+			json: `{"type": {"type": "wallpaper"}}`,
+			data: &ChatBackground{
+				Type: &BackgroundTypeWallpaper{
+					Type: BackgroundTypeNameWallpaper,
+				},
+			},
+			isError: false,
+		},
+		{
+			name:    "error_invalid",
+			json:    "",
+			data:    nil,
+			isError: true,
+		},
+		{
+			name:    "error_no_type",
+			json:    `{}`,
+			data:    nil,
+			isError: true,
+		},
+		{
+			name:    "error_invalid_type",
+			json:    `{"type": {"type": ""}`,
+			data:    nil,
+			isError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ChatBackground{}
 			err := c.UnmarshalJSON([]byte(tt.json))
 			if tt.isError {
 				require.Error(t, err)

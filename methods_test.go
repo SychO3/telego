@@ -1512,17 +1512,17 @@ func TestBot_GetChat(t *testing.T) {
 			JSONRequest(gomock.Any()).
 			Return(data, nil)
 
-		expectedChat := &Chat{
+		expectedChatFullInfo := &ChatFullInfo{
 			ID: 1,
 		}
-		resp := telegoResponse(t, expectedChat)
+		resp := telegoResponse(t, expectedChatFullInfo)
 		m.MockAPICaller.EXPECT().
 			Call(gomock.Any(), gomock.Any()).
 			Return(resp, nil)
 
-		chat, err := m.Bot.GetChat(nil)
+		chatFullInfo, err := m.Bot.GetChat(nil)
 		require.NoError(t, err)
-		assert.Equal(t, expectedChat, chat)
+		assert.Equal(t, expectedChatFullInfo, chatFullInfo)
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -1530,9 +1530,9 @@ func TestBot_GetChat(t *testing.T) {
 			JSONRequest(gomock.Any()).
 			Return(nil, errTest)
 
-		chat, err := m.Bot.GetChat(nil)
+		chatFullInfo, err := m.Bot.GetChat(nil)
 		require.Error(t, err)
-		assert.Nil(t, chat)
+		assert.Nil(t, chatFullInfo)
 	})
 }
 
@@ -3419,6 +3419,33 @@ func TestBot_AnswerPreCheckoutQuery(t *testing.T) {
 			Return(nil, errTest)
 
 		err := m.Bot.AnswerPreCheckoutQuery(nil)
+		require.Error(t, err)
+	})
+}
+
+func TestBot_RefundStarPayment(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := newMockedBot(ctrl)
+
+	t.Run("success", func(t *testing.T) {
+		m.MockRequestConstructor.EXPECT().
+			JSONRequest(gomock.Any()).
+			Return(data, nil)
+
+		m.MockAPICaller.EXPECT().
+			Call(gomock.Any(), gomock.Any()).
+			Return(emptyResp, nil)
+
+		err := m.Bot.RefundStarPayment(nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		m.MockRequestConstructor.EXPECT().
+			JSONRequest(gomock.Any()).
+			Return(nil, errTest)
+
+		err := m.Bot.RefundStarPayment(nil)
 		require.Error(t, err)
 	})
 }

@@ -1,25 +1,26 @@
 module github.com/mymmrac/telego/examples
 
-go 1.21
+go 1.22.3
 
 require (
-	github.com/fasthttp/router v1.5.0
-	github.com/mymmrac/telego v0.29.2
-	github.com/valyala/fasthttp v1.52.0
+	github.com/fasthttp/router v1.5.1
+	github.com/mymmrac/telego v0.30.2
+	github.com/valyala/fasthttp v1.54.0
 	golang.ngrok.com/ngrok v1.9.1
 )
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/bytedance/sonic v1.11.3 // indirect
-	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
-	github.com/chenzhuoyu/iasm v0.9.1 // indirect
+	github.com/bytedance/sonic v1.11.8 // indirect
+	github.com/bytedance/sonic/loader v0.1.1 // indirect
+	github.com/cloudwego/base64x v0.1.4 // indirect
+	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/grbit/go-json v0.11.0 // indirect
 	github.com/inconshreveable/log15 v3.0.0-testing.3+incompatible // indirect
 	github.com/inconshreveable/log15/v3 v3.0.0-testing.5 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/klauspost/compress v1.17.6 // indirect
+	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
