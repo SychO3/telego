@@ -406,6 +406,10 @@ type ChatFullInfo struct {
 	// Permissions - Optional. Default chat member permissions, for groups and supergroups
 	Permissions *ChatPermissions `json:"permissions,omitempty"`
 
+	// CanSendPaidMedia - Optional. True, if paid media messages can be sent or forwarded to the channel chat.
+	// The field is available only for channel chats.
+	CanSendPaidMedia bool `json:"can_send_paid_media,omitempty"`
+
 	// SlowModeDelay - Optional. For supergroups, the minimum allowed delay between consecutive messages sent by
 	// each unprivileged user; in seconds
 	SlowModeDelay int `json:"slow_mode_delay,omitempty"`
@@ -459,6 +463,7 @@ const unknownReactionTypeErr = "unknown reaction type: %s"
 // UnmarshalJSON converts JSON to Chat
 func (c *ChatFullInfo) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
@@ -470,20 +475,19 @@ func (c *ChatFullInfo) UnmarshalJSON(data []byte) error {
 
 	if value.Exists("available_reactions") {
 		availableReactions := value.GetArray("available_reactions")
-		for _, reaction := range availableReactions {
+		uc.AvailableReactions = make([]ReactionType, len(availableReactions))
+		for i, reaction := range availableReactions {
 			reactionType := string(reaction.GetStringBytes("type"))
 			switch reactionType {
 			case ReactionEmoji:
-				uc.AvailableReactions = append(uc.AvailableReactions, &ReactionTypeEmoji{})
+				uc.AvailableReactions[i] = &ReactionTypeEmoji{}
 			case ReactionCustomEmoji:
-				uc.AvailableReactions = append(uc.AvailableReactions, &ReactionTypeCustomEmoji{})
+				uc.AvailableReactions[i] = &ReactionTypeCustomEmoji{}
 			default:
 				return fmt.Errorf(unknownReactionTypeErr, reactionType)
 			}
 		}
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &uc); err != nil {
 		return err
@@ -600,6 +604,9 @@ type Message struct {
 	// Document - Optional. Message is a general file, information about the file
 	Document *Document `json:"document,omitempty"`
 
+	// PaidMedia - Optional. Message contains paid media; information about the paid media
+	PaidMedia *PaidMediaInfo `json:"paid_media,omitempty"`
+
 	// Photo - Optional. Message is a photo, available sizes of the photo
 	Photo []PhotoSize `json:"photo,omitempty"`
 
@@ -619,7 +626,7 @@ type Message struct {
 	// Voice - Optional. Message is a voice message, information about the file
 	Voice *Voice `json:"voice,omitempty"`
 
-	// Caption - Optional. Caption for the animation, audio, document, photo, video or voice
+	// Caption - Optional. Caption for the animation, audio, document, paid media, photo, video or voice
 	Caption string `json:"caption,omitempty"`
 
 	// CaptionEntities - Optional. For messages with a caption, special entities like usernames, URLs, bot
@@ -710,6 +717,10 @@ type Message struct {
 	// the payment. More about payments » (https://core.telegram.org/bots/api#payments)
 	SuccessfulPayment *SuccessfulPayment `json:"successful_payment,omitempty"`
 
+	// RefundedPayment - Optional. Message is a service message about a refunded payment, information about the
+	// payment. More about payments » (https://core.telegram.org/bots/api#payments)
+	RefundedPayment *RefundedPayment `json:"refunded_payment,omitempty"`
+
 	// UsersShared - Optional. Service message: users were shared with the bot
 	UsersShared *UsersShared `json:"users_shared,omitempty"`
 
@@ -791,6 +802,7 @@ type Message struct {
 // UnmarshalJSON converts JSON to Message
 func (m *Message) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
@@ -824,8 +836,6 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	json.ParserPoll.Put(parser)
-
 	if err = json.Unmarshal(data, &um); err != nil {
 		return err
 	}
@@ -853,6 +863,8 @@ func (m *Message) GetMessageID() int {
 func (m *Message) GetDate() int64 {
 	return m.Date
 }
+
+func (m *Message) iMaybeInaccessibleMessage() {}
 
 // MessageID - This object represents a unique message identifier.
 type MessageID struct {
@@ -893,6 +905,8 @@ func (m *InaccessibleMessage) GetDate() int64 {
 	return m.Date
 }
 
+func (m *InaccessibleMessage) iMaybeInaccessibleMessage() {}
+
 // MaybeInaccessibleMessage - This object describes a message that can be inaccessible to the bot. It can be
 // one of
 // Message (https://core.telegram.org/bots/api#message)
@@ -902,6 +916,8 @@ type MaybeInaccessibleMessage interface {
 	GetChat() Chat
 	GetMessageID() int
 	GetDate() int64
+	// Disallow external implementations
+	iMaybeInaccessibleMessage()
 }
 
 // MessageEntity - This object represents one special entity in a text message. For example, hashtags,
@@ -1008,6 +1024,9 @@ type ExternalReplyInfo struct {
 	// Document - Optional. Message is a general file, information about the file
 	Document *Document `json:"document,omitempty"`
 
+	// PaidMedia - Optional. Message contains paid media; information about the paid media
+	PaidMedia *PaidMediaInfo `json:"paid_media,omitempty"`
+
 	// Photo - Optional. Message is a photo, available sizes of the photo
 	Photo []PhotoSize `json:"photo,omitempty"`
 
@@ -1063,6 +1082,7 @@ type ExternalReplyInfo struct {
 // UnmarshalJSON converts JSON to ExternalReplyInfo
 func (e *ExternalReplyInfo) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
@@ -1089,8 +1109,6 @@ func (e *ExternalReplyInfo) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown origin: %s", originType)
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &ue); err != nil {
 		return err
@@ -1142,6 +1160,8 @@ type ReplyParameters struct {
 type MessageOrigin interface {
 	OriginType() string
 	OriginalDate() int64
+	// Disallow external implementations
+	iMessageOrigin()
 }
 
 // Message origin types
@@ -1174,6 +1194,8 @@ func (m *MessageOriginUser) OriginalDate() int64 {
 	return m.Date
 }
 
+func (m *MessageOriginUser) iMessageOrigin() {}
+
 // MessageOriginHiddenUser - The message was originally sent by an unknown user.
 type MessageOriginHiddenUser struct {
 	// Type - Type of the message origin, always “hidden_user”
@@ -1195,6 +1217,8 @@ func (m *MessageOriginHiddenUser) OriginType() string {
 func (m *MessageOriginHiddenUser) OriginalDate() int64 {
 	return m.Date
 }
+
+func (m *MessageOriginHiddenUser) iMessageOrigin() {}
 
 // MessageOriginChat - The message was originally sent on behalf of a chat to a group chat.
 type MessageOriginChat struct {
@@ -1221,6 +1245,8 @@ func (m *MessageOriginChat) OriginType() string {
 func (m *MessageOriginChat) OriginalDate() int64 {
 	return m.Date
 }
+
+func (m *MessageOriginChat) iMessageOrigin() {}
 
 // MessageOriginChannel - The message was originally sent to a channel chat.
 type MessageOriginChannel struct {
@@ -1249,6 +1275,8 @@ func (m *MessageOriginChannel) OriginType() string {
 func (m *MessageOriginChannel) OriginalDate() int64 {
 	return m.Date
 }
+
+func (m *MessageOriginChannel) iMessageOrigin() {}
 
 // PhotoSize - This object represents one size of a photo or a file
 // (https://core.telegram.org/bots/api#document) / sticker (https://core.telegram.org/bots/api#sticker)
@@ -1280,22 +1308,22 @@ type Animation struct {
 	// different bots. Can't be used to download or reuse the file.
 	FileUniqueID string `json:"file_unique_id"`
 
-	// Width - Video width as defined by sender
+	// Width - Video width as defined by the sender
 	Width int `json:"width"`
 
-	// Height - Video height as defined by sender
+	// Height - Video height as defined by the sender
 	Height int `json:"height"`
 
-	// Duration - Duration of the video in seconds as defined by sender
+	// Duration - Duration of the video in seconds as defined by the sender
 	Duration int `json:"duration"`
 
-	// Thumbnail - Optional. Animation thumbnail as defined by sender
+	// Thumbnail - Optional. Animation thumbnail as defined by the sender
 	Thumbnail *PhotoSize `json:"thumbnail,omitempty"`
 
-	// FileName - Optional. Original animation filename as defined by sender
+	// FileName - Optional. Original animation filename as defined by the sender
 	FileName string `json:"file_name,omitempty"`
 
-	// MimeType - Optional. MIME type of the file as defined by sender
+	// MimeType - Optional. MIME type of the file as defined by the sender
 	MimeType string `json:"mime_type,omitempty"`
 
 	// FileSize - Optional. File size in bytes. It can be bigger than 2^31 and some programming languages may
@@ -1313,19 +1341,19 @@ type Audio struct {
 	// different bots. Can't be used to download or reuse the file.
 	FileUniqueID string `json:"file_unique_id"`
 
-	// Duration - Duration of the audio in seconds as defined by sender
+	// Duration - Duration of the audio in seconds as defined by the sender
 	Duration int `json:"duration"`
 
-	// Performer - Optional. Performer of the audio as defined by sender or by audio tags
+	// Performer - Optional. Performer of the audio as defined by the sender or by audio tags
 	Performer string `json:"performer,omitempty"`
 
-	// Title - Optional. Title of the audio as defined by sender or by audio tags
+	// Title - Optional. Title of the audio as defined by the sender or by audio tags
 	Title string `json:"title,omitempty"`
 
-	// FileName - Optional. Original filename as defined by sender
+	// FileName - Optional. Original filename as defined by the sender
 	FileName string `json:"file_name,omitempty"`
 
-	// MimeType - Optional. MIME type of the file as defined by sender
+	// MimeType - Optional. MIME type of the file as defined by the sender
 	MimeType string `json:"mime_type,omitempty"`
 
 	// FileSize - Optional. File size in bytes. It can be bigger than 2^31 and some programming languages may
@@ -1348,13 +1376,13 @@ type Document struct {
 	// different bots. Can't be used to download or reuse the file.
 	FileUniqueID string `json:"file_unique_id"`
 
-	// Thumbnail - Optional. Document thumbnail as defined by sender
+	// Thumbnail - Optional. Document thumbnail as defined by the sender
 	Thumbnail *PhotoSize `json:"thumbnail,omitempty"`
 
-	// FileName - Optional. Original filename as defined by sender
+	// FileName - Optional. Original filename as defined by the sender
 	FileName string `json:"file_name,omitempty"`
 
-	// MimeType - Optional. MIME type of the file as defined by sender
+	// MimeType - Optional. MIME type of the file as defined by the sender
 	MimeType string `json:"mime_type,omitempty"`
 
 	// FileSize - Optional. File size in bytes. It can be bigger than 2^31 and some programming languages may
@@ -1381,22 +1409,22 @@ type Video struct {
 	// different bots. Can't be used to download or reuse the file.
 	FileUniqueID string `json:"file_unique_id"`
 
-	// Width - Video width as defined by sender
+	// Width - Video width as defined by the sender
 	Width int `json:"width"`
 
-	// Height - Video height as defined by sender
+	// Height - Video height as defined by the sender
 	Height int `json:"height"`
 
-	// Duration - Duration of the video in seconds as defined by sender
+	// Duration - Duration of the video in seconds as defined by the sender
 	Duration int `json:"duration"`
 
 	// Thumbnail - Optional. Video thumbnail
 	Thumbnail *PhotoSize `json:"thumbnail,omitempty"`
 
-	// FileName - Optional. Original filename as defined by sender
+	// FileName - Optional. Original filename as defined by the sender
 	FileName string `json:"file_name,omitempty"`
 
-	// MimeType - Optional. MIME type of the file as defined by sender
+	// MimeType - Optional. MIME type of the file as defined by the sender
 	MimeType string `json:"mime_type,omitempty"`
 
 	// FileSize - Optional. File size in bytes. It can be bigger than 2^31 and some programming languages may
@@ -1416,10 +1444,10 @@ type VideoNote struct {
 	// different bots. Can't be used to download or reuse the file.
 	FileUniqueID string `json:"file_unique_id"`
 
-	// Length - Video width and height (diameter of the video message) as defined by sender
+	// Length - Video width and height (diameter of the video message) as defined by the sender
 	Length int `json:"length"`
 
-	// Duration - Duration of the video in seconds as defined by sender
+	// Duration - Duration of the video in seconds as defined by the sender
 	Duration int `json:"duration"`
 
 	// Thumbnail - Optional. Video thumbnail
@@ -1438,10 +1466,10 @@ type Voice struct {
 	// different bots. Can't be used to download or reuse the file.
 	FileUniqueID string `json:"file_unique_id"`
 
-	// Duration - Duration of the audio in seconds as defined by sender
+	// Duration - Duration of the audio in seconds as defined by the sender
 	Duration int `json:"duration"`
 
-	// MimeType - Optional. MIME type of the file as defined by sender
+	// MimeType - Optional. MIME type of the file as defined by the sender
 	MimeType string `json:"mime_type,omitempty"`
 
 	// FileSize - Optional. File size in bytes. It can be bigger than 2^31 and some programming languages may
@@ -1449,6 +1477,125 @@ type Voice struct {
 	// integer or double-precision float type are safe for storing this value.
 	FileSize int64 `json:"file_size,omitempty"`
 }
+
+// PaidMediaInfo - Describes the paid media added to a message.
+type PaidMediaInfo struct {
+	// StarCount - The number of Telegram Stars that must be paid to buy access to the media
+	StarCount int `json:"star_count"`
+
+	// PaidMedia - Information about the paid media
+	PaidMedia []PaidMedia `json:"paid_media"`
+}
+
+// UnmarshalJSON converts JSON to PaidMediaInfo
+func (m *PaidMediaInfo) UnmarshalJSON(data []byte) error {
+	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
+
+	value, err := parser.ParseBytes(data)
+	if err != nil {
+		return err
+	}
+
+	type uPaidMediaInfo PaidMediaInfo
+	var um uPaidMediaInfo
+
+	if value.Exists("paid_media") {
+		paidMedia := value.GetArray("paid_media")
+		um.PaidMedia = make([]PaidMedia, len(paidMedia))
+		for i, media := range paidMedia {
+			mediaType := string(media.GetStringBytes("type"))
+			switch mediaType {
+			case PaidMediaTypePreview:
+				um.PaidMedia[i] = &PaidMediaPreview{}
+			case PaidMediaTypePhoto:
+				um.PaidMedia[i] = &PaidMediaPhoto{}
+			case PaidMediaTypeVideo:
+				um.PaidMedia[i] = &PaidMediaVideo{}
+			default:
+				return fmt.Errorf("unknown paid media type: %s", mediaType)
+			}
+		}
+	}
+
+	if err = json.Unmarshal(data, &um); err != nil {
+		return err
+	}
+	*m = PaidMediaInfo(um)
+
+	return nil
+}
+
+// PaidMedia - This object describes paid media. Currently, it can be one of
+// PaidMediaPreview (https://core.telegram.org/bots/api#paidmediapreview)
+// PaidMediaPhoto (https://core.telegram.org/bots/api#paidmediaphoto)
+// PaidMediaVideo (https://core.telegram.org/bots/api#paidmediavideo)
+type PaidMedia interface {
+	MediaType() string
+	// Disallow external implementations
+	iPaidMedia()
+}
+
+// Paid media types
+const (
+	PaidMediaTypePreview = "preview"
+	PaidMediaTypePhoto   = "photo"
+	PaidMediaTypeVideo   = "video"
+)
+
+// PaidMediaPreview - The paid media isn't available before the payment.
+type PaidMediaPreview struct {
+	// Type - Type of the paid media, always “preview”
+	Type string `json:"type"`
+
+	// Width - Optional. Media width as defined by the sender
+	Width int `json:"width,omitempty"`
+
+	// Height - Optional. Media height as defined by the sender
+	Height int `json:"height,omitempty"`
+
+	// Duration - Optional. Duration of the media in seconds as defined by the sender
+	Duration int `json:"duration,omitempty"`
+}
+
+// MediaType returns PaidMedia type
+func (m *PaidMediaPreview) MediaType() string {
+	return PaidMediaTypePreview
+}
+
+func (m *PaidMediaPreview) iPaidMedia() {}
+
+// PaidMediaPhoto - The paid media is a photo.
+type PaidMediaPhoto struct {
+	// Type - Type of the paid media, always “photo”
+	Type string `json:"type"`
+
+	// Photo - The photo
+	Photo []PhotoSize `json:"photo"`
+}
+
+// MediaType returns PaidMedia type
+func (m *PaidMediaPhoto) MediaType() string {
+	return PaidMediaTypePhoto
+}
+
+func (m *PaidMediaPhoto) iPaidMedia() {}
+
+// PaidMediaVideo - The paid media is a video.
+type PaidMediaVideo struct {
+	// Type - Type of the paid media, always “video”
+	Type string `json:"type"`
+
+	// Video - The video
+	Video Video `json:"video"`
+}
+
+// MediaType returns PaidMedia type
+func (m *PaidMediaVideo) MediaType() string {
+	return PaidMediaTypeVideo
+}
+
+func (m *PaidMediaVideo) iPaidMedia() {}
 
 // Contact - This object represents a phone contact.
 type Contact struct {
@@ -1504,7 +1651,7 @@ type PollOption struct {
 	VoterCount int `json:"voter_count"`
 }
 
-// InputPollOption - This object contains information about one answer option in a poll to send.
+// InputPollOption - This object contains information about one answer option in a poll to be sent.
 type InputPollOption struct {
 	// Text - Option text, 1-100 characters
 	Text string `json:"text"`
@@ -1591,10 +1738,10 @@ const (
 
 // Location - This object represents a point on the map.
 type Location struct {
-	// Latitude - Latitude as defined by sender
+	// Latitude - Latitude as defined by the sender
 	Latitude float64 `json:"latitude"`
 
-	// Longitude - Longitude as defined by sender
+	// Longitude - Longitude as defined by the sender
 	Longitude float64 `json:"longitude"`
 
 	// HorizontalAccuracy - Optional. The radius of uncertainty for the location, measured in meters; 0-1500
@@ -1682,6 +1829,8 @@ type ChatBoostAdded struct {
 // BackgroundFillFreeformGradient (https://core.telegram.org/bots/api#backgroundfillfreeformgradient)
 type BackgroundFill interface {
 	BackgroundFilled() string
+	// Disallow external implementations
+	iBackgroundFill()
 }
 
 // Background fill types
@@ -1705,6 +1854,8 @@ func (b *BackgroundFillSolid) BackgroundFilled() string {
 	return BackgroundFilledSolid
 }
 
+func (b *BackgroundFillSolid) iBackgroundFill() {}
+
 // BackgroundFillGradient - The background is a gradient fill.
 type BackgroundFillGradient struct {
 	// Type - Type of the background fill, always “gradient”
@@ -1725,6 +1876,8 @@ func (b *BackgroundFillGradient) BackgroundFilled() string {
 	return BackgroundFilledGradient
 }
 
+func (b *BackgroundFillGradient) iBackgroundFill() {}
+
 // BackgroundFillFreeformGradient - The background is a freeform gradient that rotates after every message in
 // the chat.
 type BackgroundFillFreeformGradient struct {
@@ -1741,6 +1894,8 @@ func (b *BackgroundFillFreeformGradient) BackgroundFilled() string {
 	return BackgroundFilledFreeformGradient
 }
 
+func (b *BackgroundFillFreeformGradient) iBackgroundFill() {}
+
 // BackgroundType - This object describes the type of a background. Currently, it can be one of
 // BackgroundTypeFill (https://core.telegram.org/bots/api#backgroundtypefill)
 // BackgroundTypeWallpaper (https://core.telegram.org/bots/api#backgroundtypewallpaper)
@@ -1748,6 +1903,8 @@ func (b *BackgroundFillFreeformGradient) BackgroundFilled() string {
 // BackgroundTypeChatTheme (https://core.telegram.org/bots/api#backgroundtypechattheme)
 type BackgroundType interface {
 	BackgroundType() string
+	// Disallow external implementations
+	iBackgroundType()
 }
 
 // Background type names
@@ -1775,21 +1932,24 @@ func (b *BackgroundTypeFill) BackgroundType() string {
 	return BackgroundTypeNameFill
 }
 
+func (b *BackgroundTypeFill) iBackgroundType() {}
+
 // UnmarshalJSON converts JSON to BackgroundTypeFill
 func (b *BackgroundTypeFill) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
-	type uBackgroundTypeFill BackgroundTypeFill
-	var ub uBackgroundTypeFill
-
 	if !value.Exists("fill") {
 		return errors.New("no fill")
 	}
+
+	type uBackgroundTypeFill BackgroundTypeFill
+	var ub uBackgroundTypeFill
 
 	fillType := string(value.GetStringBytes("fill", "type"))
 	switch fillType {
@@ -1802,8 +1962,6 @@ func (b *BackgroundTypeFill) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown chat background fill type: %s", fillType)
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &ub); err != nil {
 		return err
@@ -1837,6 +1995,8 @@ func (b *BackgroundTypeWallpaper) BackgroundType() string {
 	return BackgroundTypeNameWallpaper
 }
 
+func (b *BackgroundTypeWallpaper) iBackgroundType() {}
+
 // BackgroundTypePattern - The background is a PNG or TGV (gzipped subset of SVG with MIME type
 // “application/x-tgwallpattern”) pattern to be combined with the background fill chosen by the user.
 type BackgroundTypePattern struct {
@@ -1865,6 +2025,8 @@ func (b *BackgroundTypePattern) BackgroundType() string {
 	return BackgroundTypeNamePattern
 }
 
+func (b *BackgroundTypePattern) iBackgroundType() {}
+
 // BackgroundTypeChatTheme - The background is taken directly from a built-in chat theme.
 type BackgroundTypeChatTheme struct {
 	// Type - Type of the background, always “chat_theme”
@@ -1879,27 +2041,33 @@ func (b *BackgroundTypeChatTheme) BackgroundType() string {
 	return BackgroundTypeNameChatTheme
 }
 
+func (b *BackgroundTypeChatTheme) iBackgroundType() {}
+
 // ChatBackground - This object represents a chat background.
 type ChatBackground struct {
 	// Type - Type of the background
 	Type BackgroundType `json:"type"`
 }
 
+// noTypeErr error
+const noTypeErr = "no type"
+
 // UnmarshalJSON converts JSON to ChatBackground
 func (c *ChatBackground) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
+	if !value.Exists("type") {
+		return errors.New(noTypeErr)
+	}
+
 	type uChatBackground ChatBackground
 	var uc uChatBackground
-
-	if !value.Exists("type") {
-		return errors.New("no type")
-	}
 
 	backgroundType := string(value.GetStringBytes("type", "type"))
 	switch backgroundType {
@@ -1914,8 +2082,6 @@ func (c *ChatBackground) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown chat background type: %s", backgroundType)
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &uc); err != nil {
 		return err
@@ -2214,6 +2380,8 @@ type WebAppInfo struct {
 type ReplyMarkup interface {
 	// ReplyType - Returns type of reply
 	ReplyType() string
+	// Disallow external implementations
+	iReplyMarkup()
 }
 
 // ReplyMarkup types
@@ -2264,6 +2432,8 @@ type ReplyKeyboardMarkup struct {
 func (r *ReplyKeyboardMarkup) ReplyType() string {
 	return MarkupTypeReplyKeyboard
 }
+
+func (r *ReplyKeyboardMarkup) iReplyMarkup() {}
 
 // KeyboardButton - This object represents one button of the reply keyboard. At most one of the optional
 // fields must be used to specify type of the button. For simple text buttons, String can be used instead of
@@ -2412,6 +2582,8 @@ func (r *ReplyKeyboardRemove) ReplyType() string {
 	return MarkupTypeReplyKeyboardRemove
 }
 
+func (r *ReplyKeyboardRemove) iReplyMarkup() {}
+
 // InlineKeyboardMarkup - This object represents an inline keyboard
 // (https://core.telegram.org/bots/features#inline-keyboards) that appears right next to the message it belongs
 // to.
@@ -2426,6 +2598,8 @@ func (i *InlineKeyboardMarkup) ReplyType() string {
 	return MarkupTypeInlineKeyboard
 }
 
+func (i *InlineKeyboardMarkup) iReplyMarkup() {}
+
 // InlineKeyboardButton - This object represents one button of an inline keyboard. Exactly one of the
 // optional fields must be used to specify type of the button.
 type InlineKeyboardButton struct {
@@ -2438,8 +2612,7 @@ type InlineKeyboardButton struct {
 	URL string `json:"url,omitempty"`
 
 	// CallbackData - Optional. Data to be sent in a callback query
-	// (https://core.telegram.org/bots/api#callbackquery) to the bot when button is pressed, 1-64 bytes. Not
-	// supported for messages sent on behalf of a Telegram Business account.
+	// (https://core.telegram.org/bots/api#callbackquery) to the bot when the button is pressed, 1-64 bytes
 	CallbackData string `json:"callback_data,omitempty"`
 
 	// WebApp - Optional. Description of the Web App (https://core.telegram.org/bots/webapps) that will be
@@ -2571,6 +2744,7 @@ type CallbackQuery struct {
 // UnmarshalJSON converts JSON to CallbackQuery
 func (q *CallbackQuery) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
@@ -2579,6 +2753,7 @@ func (q *CallbackQuery) UnmarshalJSON(data []byte) error {
 
 	type uCallbackQuery CallbackQuery
 	var uq uCallbackQuery
+
 	if value.Exists("message") {
 		if value.GetInt("message", "date") == 0 {
 			uq.Message = &InaccessibleMessage{}
@@ -2586,8 +2761,6 @@ func (q *CallbackQuery) UnmarshalJSON(data []byte) error {
 			uq.Message = &Message{}
 		}
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &uq); err != nil {
 		return err
@@ -2622,6 +2795,8 @@ type ForceReply struct {
 func (f *ForceReply) ReplyType() string {
 	return MarkupTypeForceReply
 }
+
+func (f *ForceReply) iReplyMarkup() {}
 
 // ChatPhoto - This object represents a chat photo.
 type ChatPhoto struct {
@@ -2762,27 +2937,66 @@ type ChatMemberUpdated struct {
 }
 
 // UnmarshalJSON converts JSON to ChatMemberUpdated
-func (c *ChatMemberUpdated) UnmarshalJSON(bytes []byte) error {
-	var chatMemberUpdatedData struct {
-		Chat          Chat            `json:"chat"`
-		From          User            `json:"from"`
-		Date          int64           `json:"date"`
-		OldChatMember chatMemberData  `json:"old_chat_member"`
-		NewChatMember chatMemberData  `json:"new_chat_member"`
-		InviteLink    *ChatInviteLink `json:"invite_link,omitempty"`
-	}
+func (c *ChatMemberUpdated) UnmarshalJSON(data []byte) error { //nolint:funlen,revive,cyclop,gocyclo
+	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
-	err := json.Unmarshal(bytes, &chatMemberUpdatedData)
+	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
-	c.Chat = chatMemberUpdatedData.Chat
-	c.From = chatMemberUpdatedData.From
-	c.Date = chatMemberUpdatedData.Date
-	c.OldChatMember = chatMemberUpdatedData.OldChatMember.Data
-	c.NewChatMember = chatMemberUpdatedData.NewChatMember.Data
-	c.InviteLink = chatMemberUpdatedData.InviteLink
+	if !value.Exists("old_chat_member") {
+		return errors.New("no old chat member")
+	}
+
+	if !value.Exists("new_chat_member") {
+		return errors.New("no new chat member")
+	}
+
+	type uChatMemberUpdated ChatMemberUpdated
+	var uc uChatMemberUpdated
+
+	oldMemberStatus := string(value.GetStringBytes("old_chat_member", "status"))
+	switch oldMemberStatus {
+	case MemberStatusCreator:
+		uc.OldChatMember = &ChatMemberOwner{}
+	case MemberStatusAdministrator:
+		uc.OldChatMember = &ChatMemberAdministrator{}
+	case MemberStatusMember:
+		uc.OldChatMember = &ChatMemberMember{}
+	case MemberStatusRestricted:
+		uc.OldChatMember = &ChatMemberRestricted{}
+	case MemberStatusLeft:
+		uc.OldChatMember = &ChatMemberLeft{}
+	case MemberStatusBanned:
+		uc.OldChatMember = &ChatMemberBanned{}
+	default:
+		return fmt.Errorf("unknown chat member status: %s", oldMemberStatus)
+	}
+
+	newMemberStatus := string(value.GetStringBytes("new_chat_member", "status"))
+	switch newMemberStatus {
+	case MemberStatusCreator:
+		uc.NewChatMember = &ChatMemberOwner{}
+	case MemberStatusAdministrator:
+		uc.NewChatMember = &ChatMemberAdministrator{}
+	case MemberStatusMember:
+		uc.NewChatMember = &ChatMemberMember{}
+	case MemberStatusRestricted:
+		uc.NewChatMember = &ChatMemberRestricted{}
+	case MemberStatusLeft:
+		uc.NewChatMember = &ChatMemberLeft{}
+	case MemberStatusBanned:
+		uc.NewChatMember = &ChatMemberBanned{}
+	default:
+		return fmt.Errorf("unknown chat member status: %s", newMemberStatus)
+	}
+
+	if err = json.Unmarshal(data, &uc); err != nil {
+		return err
+	}
+	*c = ChatMemberUpdated(uc)
 
 	return nil
 }
@@ -2792,41 +3006,40 @@ type chatMemberData struct {
 }
 
 // UnmarshalJSON converts JSON to chatMemberData
-func (c *chatMemberData) UnmarshalJSON(bytes []byte) error {
+func (c *chatMemberData) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
-	value, err := parser.ParseBytes(bytes)
+	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
 	memberStatus := string(value.GetStringBytes("status"))
-	json.ParserPoll.Put(parser)
-
 	switch memberStatus {
 	case MemberStatusCreator:
 		var cm *ChatMemberOwner
-		err = json.Unmarshal(bytes, &cm)
+		err = json.Unmarshal(data, &cm)
 		c.Data = cm
 	case MemberStatusAdministrator:
 		var cm *ChatMemberAdministrator
-		err = json.Unmarshal(bytes, &cm)
+		err = json.Unmarshal(data, &cm)
 		c.Data = cm
 	case MemberStatusMember:
 		var cm *ChatMemberMember
-		err = json.Unmarshal(bytes, &cm)
+		err = json.Unmarshal(data, &cm)
 		c.Data = cm
 	case MemberStatusRestricted:
 		var cm *ChatMemberRestricted
-		err = json.Unmarshal(bytes, &cm)
+		err = json.Unmarshal(data, &cm)
 		c.Data = cm
 	case MemberStatusLeft:
 		var cm *ChatMemberLeft
-		err = json.Unmarshal(bytes, &cm)
+		err = json.Unmarshal(data, &cm)
 		c.Data = cm
 	case MemberStatusBanned:
 		var cm *ChatMemberBanned
-		err = json.Unmarshal(bytes, &cm)
+		err = json.Unmarshal(data, &cm)
 		c.Data = cm
 	default:
 		return fmt.Errorf("unknown member status: %q", memberStatus)
@@ -2847,6 +3060,8 @@ type ChatMember interface {
 	MemberStatus() string
 	MemberUser() User
 	MemberIsMember() bool
+	// Disallow external implementations
+	iChatMember()
 }
 
 // ChatMember statuses
@@ -2889,6 +3104,8 @@ func (c *ChatMemberOwner) MemberUser() User {
 func (c *ChatMemberOwner) MemberIsMember() bool {
 	return true
 }
+
+func (c *ChatMemberOwner) iChatMember() {}
 
 // ChatMemberAdministrator - Represents a chat member (https://core.telegram.org/bots/api#chatmember) that
 // has some additional privileges.
@@ -2975,6 +3192,8 @@ func (c *ChatMemberAdministrator) MemberIsMember() bool {
 	return true
 }
 
+func (c *ChatMemberAdministrator) iChatMember() {}
+
 // ChatMemberMember - Represents a chat member (https://core.telegram.org/bots/api#chatmember) that has no
 // additional privileges or restrictions.
 type ChatMemberMember struct {
@@ -2999,6 +3218,8 @@ func (c *ChatMemberMember) MemberUser() User {
 func (c *ChatMemberMember) MemberIsMember() bool {
 	return true
 }
+
+func (c *ChatMemberMember) iChatMember() {}
 
 // ChatMemberRestricted - Represents a chat member (https://core.telegram.org/bots/api#chatmember) that is
 // under certain restrictions in the chat. Supergroups only.
@@ -3076,6 +3297,8 @@ func (c *ChatMemberRestricted) MemberIsMember() bool {
 	return c.IsMember
 }
 
+func (c *ChatMemberRestricted) iChatMember() {}
+
 // ChatMemberLeft - Represents a chat member (https://core.telegram.org/bots/api#chatmember) that isn't
 // currently a member of the chat, but may join it themselves.
 type ChatMemberLeft struct {
@@ -3100,6 +3323,8 @@ func (c *ChatMemberLeft) MemberUser() User {
 func (c *ChatMemberLeft) MemberIsMember() bool {
 	return false
 }
+
+func (c *ChatMemberLeft) iChatMember() {}
 
 // ChatMemberBanned - Represents a chat member (https://core.telegram.org/bots/api#chatmember) that was
 // banned in the chat and can't return to the chat or view chat messages.
@@ -3129,6 +3354,8 @@ func (c *ChatMemberBanned) MemberUser() User {
 func (c *ChatMemberBanned) MemberIsMember() bool {
 	return false
 }
+
+func (c *ChatMemberBanned) iChatMember() {}
 
 // ChatJoinRequest - Represents a join request sent to a chat.
 type ChatJoinRequest struct {
@@ -3271,6 +3498,8 @@ type ChatLocation struct {
 // ReactionTypeCustomEmoji (https://core.telegram.org/bots/api#reactiontypecustomemoji)
 type ReactionType interface {
 	ReactionType() string
+	// Disallow external implementations
+	iReactionType()
 }
 
 // Reaction types
@@ -3299,6 +3528,8 @@ func (r *ReactionTypeEmoji) ReactionType() string {
 	return ReactionEmoji
 }
 
+func (r *ReactionTypeEmoji) iReactionType() {}
+
 // ReactionTypeCustomEmoji - The reaction is based on a custom emoji.
 type ReactionTypeCustomEmoji struct {
 	// Type - Type of the reaction, always “custom_emoji”
@@ -3313,6 +3544,8 @@ func (r *ReactionTypeCustomEmoji) ReactionType() string {
 	return ReactionCustomEmoji
 }
 
+func (r *ReactionTypeCustomEmoji) iReactionType() {}
+
 // ReactionCount - Represents a reaction added to a message along with the number of times it was added.
 type ReactionCount struct {
 	// Type - Type of the reaction
@@ -3325,18 +3558,19 @@ type ReactionCount struct {
 // UnmarshalJSON converts JSON to ReactionCount
 func (c *ReactionCount) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
+	if !value.Exists("type") {
+		return errors.New(noTypeErr)
+	}
+
 	type uReactionCount ReactionCount
 	var uc uReactionCount
-
-	if !value.Exists("type") {
-		return errors.New("no type")
-	}
 
 	reactionType := string(value.GetStringBytes("type", "type"))
 	switch reactionType {
@@ -3347,8 +3581,6 @@ func (c *ReactionCount) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf(unknownReactionTypeErr, reactionType)
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &uc); err != nil {
 		return err
@@ -3385,6 +3617,7 @@ type MessageReactionUpdated struct {
 // UnmarshalJSON converts JSON to MessageReactionUpdated
 func (u *MessageReactionUpdated) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
@@ -3403,32 +3636,32 @@ func (u *MessageReactionUpdated) UnmarshalJSON(data []byte) error {
 	var uu uMessageReactionUpdated
 
 	oldReactions := value.GetArray("old_reaction")
-	for _, reaction := range oldReactions {
+	uu.OldReaction = make([]ReactionType, len(oldReactions))
+	for i, reaction := range oldReactions {
 		reactionType := string(reaction.GetStringBytes("type"))
 		switch reactionType {
 		case ReactionEmoji:
-			uu.OldReaction = append(uu.OldReaction, &ReactionTypeEmoji{})
+			uu.OldReaction[i] = &ReactionTypeEmoji{}
 		case ReactionCustomEmoji:
-			uu.OldReaction = append(uu.OldReaction, &ReactionTypeCustomEmoji{})
+			uu.OldReaction[i] = &ReactionTypeCustomEmoji{}
 		default:
 			return fmt.Errorf(unknownReactionTypeErr, reactionType)
 		}
 	}
 
 	newReactions := value.GetArray("new_reaction")
-	for _, reaction := range newReactions {
+	uu.NewReaction = make([]ReactionType, len(newReactions))
+	for i, reaction := range newReactions {
 		reactionType := string(reaction.GetStringBytes("type"))
 		switch reactionType {
 		case ReactionEmoji:
-			uu.NewReaction = append(uu.NewReaction, &ReactionTypeEmoji{})
+			uu.NewReaction[i] = &ReactionTypeEmoji{}
 		case ReactionCustomEmoji:
-			uu.NewReaction = append(uu.NewReaction, &ReactionTypeCustomEmoji{})
+			uu.NewReaction[i] = &ReactionTypeCustomEmoji{}
 		default:
 			return fmt.Errorf(unknownReactionTypeErr, reactionType)
 		}
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &uu); err != nil {
 		return err
@@ -3479,81 +3712,6 @@ type BotCommand struct {
 	Description string `json:"description"`
 }
 
-// BotCommandScope - This object represents the scope to which bot commands are applied. Currently, the
-// following 7 scopes are supported:
-// BotCommandScopeDefault (https://core.telegram.org/bots/api#botcommandscopedefault)
-// BotCommandScopeAllPrivateChats (https://core.telegram.org/bots/api#botcommandscopeallprivatechats)
-// BotCommandScopeAllGroupChats (https://core.telegram.org/bots/api#botcommandscopeallgroupchats)
-// BotCommandScopeAllChatAdministrators
-// (https://core.telegram.org/bots/api#botcommandscopeallchatadministrators)
-// BotCommandScopeChat (https://core.telegram.org/bots/api#botcommandscopechat)
-// BotCommandScopeChatAdministrators (https://core.telegram.org/bots/api#botcommandscopechatadministrators)
-// BotCommandScopeChatMember (https://core.telegram.org/bots/api#botcommandscopechatmember)
-type BotCommandScope interface {
-	ScopeType() string
-}
-
-// BotCommandScope types
-const (
-	ScopeTypeDefault               = "default"
-	ScopeTypeAllPrivateChats       = "all_private_chats"
-	ScopeTypeAllGroupChats         = "all_group_chats"
-	ScopeTypeAllChatAdministrators = "all_chat_administrators"
-	ScopeTypeChat                  = "chat"
-	ScopeTypeChatAdministrators    = "chat_administrators"
-	ScopeTypeChatMember            = "chat_member"
-)
-
-// BotCommandScopeDefault - Represents the default scope (https://core.telegram.org/bots/api#botcommandscope)
-// of bot commands. Default commands are used if no commands with a narrower scope
-// (https://core.telegram.org/bots/api#determining-list-of-commands) are specified for the user.
-type BotCommandScopeDefault struct {
-	// Type - Scope type, must be default
-	Type string `json:"type"`
-}
-
-// ScopeType returns BotCommandScope type
-func (b *BotCommandScopeDefault) ScopeType() string {
-	return ScopeTypeDefault
-}
-
-// BotCommandScopeAllPrivateChats - Represents the scope (https://core.telegram.org/bots/api#botcommandscope)
-// of bot commands, covering all private chats.
-type BotCommandScopeAllPrivateChats struct {
-	// Type - Scope type, must be all_private_chats
-	Type string `json:"type"`
-}
-
-// ScopeType returns BotCommandScope type
-func (b *BotCommandScopeAllPrivateChats) ScopeType() string {
-	return ScopeTypeAllPrivateChats
-}
-
-// BotCommandScopeAllGroupChats - Represents the scope (https://core.telegram.org/bots/api#botcommandscope)
-// of bot commands, covering all group and supergroup chats.
-type BotCommandScopeAllGroupChats struct {
-	// Type - Scope type, must be all_group_chats
-	Type string `json:"type"`
-}
-
-// ScopeType returns BotCommandScope type
-func (b *BotCommandScopeAllGroupChats) ScopeType() string {
-	return ScopeTypeAllGroupChats
-}
-
-// BotCommandScopeAllChatAdministrators - Represents the scope
-// (https://core.telegram.org/bots/api#botcommandscope) of bot commands, covering all group and supergroup chat
-// administrators.
-type BotCommandScopeAllChatAdministrators struct {
-	// Type - Scope type, must be all_chat_administrators
-	Type string `json:"type"`
-}
-
-// ScopeType returns BotCommandScope type
-func (b *BotCommandScopeAllChatAdministrators) ScopeType() string {
-	return ScopeTypeAllChatAdministrators
-}
-
 // ChatID - Represents chat ID as int64 or string
 type ChatID struct {
 	// ID - Unique identifier for the target chat
@@ -3590,6 +3748,91 @@ func (c ChatID) MarshalJSON() ([]byte, error) {
 	return []byte(`""`), nil
 }
 
+// BotCommandScope - This object represents the scope to which bot commands are applied. Currently, the
+// following 7 scopes are supported:
+// BotCommandScopeDefault (https://core.telegram.org/bots/api#botcommandscopedefault)
+// BotCommandScopeAllPrivateChats (https://core.telegram.org/bots/api#botcommandscopeallprivatechats)
+// BotCommandScopeAllGroupChats (https://core.telegram.org/bots/api#botcommandscopeallgroupchats)
+// BotCommandScopeAllChatAdministrators
+// (https://core.telegram.org/bots/api#botcommandscopeallchatadministrators)
+// BotCommandScopeChat (https://core.telegram.org/bots/api#botcommandscopechat)
+// BotCommandScopeChatAdministrators (https://core.telegram.org/bots/api#botcommandscopechatadministrators)
+// BotCommandScopeChatMember (https://core.telegram.org/bots/api#botcommandscopechatmember)
+type BotCommandScope interface {
+	ScopeType() string
+	// Disallow external implementations
+	iBotCommandScope()
+}
+
+// BotCommandScope types
+const (
+	ScopeTypeDefault               = "default"
+	ScopeTypeAllPrivateChats       = "all_private_chats"
+	ScopeTypeAllGroupChats         = "all_group_chats"
+	ScopeTypeAllChatAdministrators = "all_chat_administrators"
+	ScopeTypeChat                  = "chat"
+	ScopeTypeChatAdministrators    = "chat_administrators"
+	ScopeTypeChatMember            = "chat_member"
+)
+
+// BotCommandScopeDefault - Represents the default scope (https://core.telegram.org/bots/api#botcommandscope)
+// of bot commands. Default commands are used if no commands with a narrower scope
+// (https://core.telegram.org/bots/api#determining-list-of-commands) are specified for the user.
+type BotCommandScopeDefault struct {
+	// Type - Scope type, must be default
+	Type string `json:"type"`
+}
+
+// ScopeType returns BotCommandScope type
+func (b *BotCommandScopeDefault) ScopeType() string {
+	return ScopeTypeDefault
+}
+
+func (b *BotCommandScopeDefault) iBotCommandScope() {}
+
+// BotCommandScopeAllPrivateChats - Represents the scope (https://core.telegram.org/bots/api#botcommandscope)
+// of bot commands, covering all private chats.
+type BotCommandScopeAllPrivateChats struct {
+	// Type - Scope type, must be all_private_chats
+	Type string `json:"type"`
+}
+
+// ScopeType returns BotCommandScope type
+func (b *BotCommandScopeAllPrivateChats) ScopeType() string {
+	return ScopeTypeAllPrivateChats
+}
+
+func (b *BotCommandScopeAllPrivateChats) iBotCommandScope() {}
+
+// BotCommandScopeAllGroupChats - Represents the scope (https://core.telegram.org/bots/api#botcommandscope)
+// of bot commands, covering all group and supergroup chats.
+type BotCommandScopeAllGroupChats struct {
+	// Type - Scope type, must be all_group_chats
+	Type string `json:"type"`
+}
+
+// ScopeType returns BotCommandScope type
+func (b *BotCommandScopeAllGroupChats) ScopeType() string {
+	return ScopeTypeAllGroupChats
+}
+
+func (b *BotCommandScopeAllGroupChats) iBotCommandScope() {}
+
+// BotCommandScopeAllChatAdministrators - Represents the scope
+// (https://core.telegram.org/bots/api#botcommandscope) of bot commands, covering all group and supergroup chat
+// administrators.
+type BotCommandScopeAllChatAdministrators struct {
+	// Type - Scope type, must be all_chat_administrators
+	Type string `json:"type"`
+}
+
+// ScopeType returns BotCommandScope type
+func (b *BotCommandScopeAllChatAdministrators) ScopeType() string {
+	return ScopeTypeAllChatAdministrators
+}
+
+func (b *BotCommandScopeAllChatAdministrators) iBotCommandScope() {}
+
 // BotCommandScopeChat - Represents the scope (https://core.telegram.org/bots/api#botcommandscope) of bot
 // commands, covering a specific chat.
 type BotCommandScopeChat struct {
@@ -3605,6 +3848,8 @@ type BotCommandScopeChat struct {
 func (b *BotCommandScopeChat) ScopeType() string {
 	return ScopeTypeChat
 }
+
+func (b *BotCommandScopeChat) iBotCommandScope() {}
 
 // BotCommandScopeChatAdministrators - Represents the scope
 // (https://core.telegram.org/bots/api#botcommandscope) of bot commands, covering all administrators of a
@@ -3622,6 +3867,8 @@ type BotCommandScopeChatAdministrators struct {
 func (b *BotCommandScopeChatAdministrators) ScopeType() string {
 	return ScopeTypeChatAdministrators
 }
+
+func (b *BotCommandScopeChatAdministrators) iBotCommandScope() {}
 
 // BotCommandScopeChatMember - Represents the scope (https://core.telegram.org/bots/api#botcommandscope) of
 // bot commands, covering a specific member of a group or supergroup chat.
@@ -3641,6 +3888,8 @@ type BotCommandScopeChatMember struct {
 func (b *BotCommandScopeChatMember) ScopeType() string {
 	return ScopeTypeChatMember
 }
+
+func (b *BotCommandScopeChatMember) iBotCommandScope() {}
 
 // BotName - This object represents the bot's name.
 type BotName struct {
@@ -3669,6 +3918,8 @@ type BotShortDescription struct {
 // the menu button opens the list of bot commands.
 type MenuButton interface {
 	ButtonType() string
+	// Disallow external implementations
+	iMenuButton()
 }
 
 // MenuButton types
@@ -3683,29 +3934,32 @@ type menuButtonData struct {
 }
 
 // UnmarshalJSON converts JSON to menuButtonData
-func (m *menuButtonData) UnmarshalJSON(bytes []byte) error {
+func (m *menuButtonData) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
-	value, err := parser.ParseBytes(bytes)
+	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
-	buttonType := string(value.GetStringBytes("type"))
-	json.ParserPoll.Put(parser)
+	if !value.Exists("type") {
+		return errors.New(noTypeErr)
+	}
 
+	buttonType := string(value.GetStringBytes("type"))
 	switch buttonType {
 	case ButtonTypeCommands:
 		var mb *MenuButtonCommands
-		err = json.Unmarshal(bytes, &mb)
+		err = json.Unmarshal(data, &mb)
 		m.Data = mb
 	case ButtonTypeWebApp:
 		var mb *MenuButtonWebApp
-		err = json.Unmarshal(bytes, &mb)
+		err = json.Unmarshal(data, &mb)
 		m.Data = mb
 	case ButtonTypeDefault:
 		var mb *MenuButtonDefault
-		err = json.Unmarshal(bytes, &mb)
+		err = json.Unmarshal(data, &mb)
 		m.Data = mb
 	default:
 		return fmt.Errorf("unknown menu button type: %q", buttonType)
@@ -3725,6 +3979,8 @@ func (m *MenuButtonCommands) ButtonType() string {
 	return ButtonTypeCommands
 }
 
+func (m *MenuButtonCommands) iMenuButton() {}
+
 // MenuButtonWebApp - Represents a menu button, which launches a Web App
 // (https://core.telegram.org/bots/webapps).
 type MenuButtonWebApp struct {
@@ -3736,7 +3992,9 @@ type MenuButtonWebApp struct {
 
 	// WebApp - Description of the Web App that will be launched when the user presses the button. The Web App
 	// will be able to send an arbitrary message on behalf of the user using the method answerWebAppQuery
-	// (https://core.telegram.org/bots/api#answerwebappquery).
+	// (https://core.telegram.org/bots/api#answerwebappquery). Alternatively, a t.me link to a Web App of the bot
+	// can be specified in the object instead of the Web App's URL, in which case the Web App will be opened as if
+	// the user pressed the link.
 	WebApp WebAppInfo `json:"web_app"`
 }
 
@@ -3744,6 +4002,8 @@ type MenuButtonWebApp struct {
 func (m *MenuButtonWebApp) ButtonType() string {
 	return ButtonTypeWebApp
 }
+
+func (m *MenuButtonWebApp) iMenuButton() {}
 
 // MenuButtonDefault - Describes that no specific value for the menu button was set.
 type MenuButtonDefault struct {
@@ -3756,12 +4016,16 @@ func (m *MenuButtonDefault) ButtonType() string {
 	return ButtonTypeDefault
 }
 
+func (m *MenuButtonDefault) iMenuButton() {}
+
 // ChatBoostSource - This object describes the source of a chat boost. It can be one of
 // ChatBoostSourcePremium (https://core.telegram.org/bots/api#chatboostsourcepremium)
 // ChatBoostSourceGiftCode (https://core.telegram.org/bots/api#chatboostsourcegiftcode)
 // ChatBoostSourceGiveaway (https://core.telegram.org/bots/api#chatboostsourcegiveaway)
 type ChatBoostSource interface {
 	BoostSource() string
+	// Disallow external implementations
+	iChatBoostSource()
 }
 
 // Boost sources
@@ -3786,6 +4050,8 @@ func (b *ChatBoostSourcePremium) BoostSource() string {
 	return BoostSourcePremium
 }
 
+func (b *ChatBoostSourcePremium) iChatBoostSource() {}
+
 // ChatBoostSourceGiftCode - The boost was obtained by the creation of Telegram Premium gift codes to boost a
 // chat. Each such code boosts the chat 4 times for the duration of the corresponding Telegram Premium
 // subscription.
@@ -3801,6 +4067,8 @@ type ChatBoostSourceGiftCode struct {
 func (b *ChatBoostSourceGiftCode) BoostSource() string {
 	return BoostSourceGiftCode
 }
+
+func (b *ChatBoostSourceGiftCode) iChatBoostSource() {}
 
 // ChatBoostSourceGiveaway - The boost was obtained by the creation of a Telegram Premium giveaway. This
 // boosts the chat 4 times for the duration of the corresponding Telegram Premium subscription.
@@ -3824,6 +4092,8 @@ func (b *ChatBoostSourceGiveaway) BoostSource() string {
 	return BoostSourceGiveaway
 }
 
+func (b *ChatBoostSourceGiveaway) iChatBoostSource() {}
+
 // ChatBoost - This object contains information about a chat boost.
 type ChatBoost struct {
 	// BoostID - Unique identifier of the boost
@@ -3843,18 +4113,19 @@ type ChatBoost struct {
 // UnmarshalJSON converts JSON to ChatBoost
 func (b *ChatBoost) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
-	type uChatBoost ChatBoost
-	var ub uChatBoost
-
 	if !value.Exists("source") {
 		return errors.New("no source")
 	}
+
+	type uChatBoost ChatBoost
+	var ub uChatBoost
 
 	source := string(value.GetStringBytes("source", "source"))
 	switch source {
@@ -3867,8 +4138,6 @@ func (b *ChatBoost) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown chat boost source: %s", source)
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &ub); err != nil {
 		return err
@@ -3905,18 +4174,19 @@ type ChatBoostRemoved struct {
 // UnmarshalJSON converts JSON to ChatBoostRemoved
 func (b *ChatBoostRemoved) UnmarshalJSON(data []byte) error {
 	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
 
 	value, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
-	type uChatBoostRemoved ChatBoostRemoved
-	var ub uChatBoostRemoved
-
 	if !value.Exists("source") {
 		return errors.New("no source")
 	}
+
+	type uChatBoostRemoved ChatBoostRemoved
+	var ub uChatBoostRemoved
 
 	source := string(value.GetStringBytes("source", "source"))
 	switch source {
@@ -3929,8 +4199,6 @@ func (b *ChatBoostRemoved) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("unknown chat boost source: %s", source)
 	}
-
-	json.ParserPoll.Put(parser)
 
 	if err = json.Unmarshal(data, &ub); err != nil {
 		return err
@@ -3998,6 +4266,8 @@ type fileCompatible interface {
 // InputMediaVideo (https://core.telegram.org/bots/api#inputmediavideo)
 type InputMedia interface {
 	MediaType() string
+	// Disallow external implementations
+	iInputMedia()
 	fileCompatible
 }
 
@@ -4043,6 +4313,8 @@ type InputMediaPhoto struct {
 func (i *InputMediaPhoto) MediaType() string {
 	return MediaTypePhoto
 }
+
+func (i *InputMediaPhoto) iInputMedia() {}
 
 func (i *InputMediaPhoto) fileParameters() map[string]telegoapi.NamedReader {
 	i.Media.needAttach = true
@@ -4104,6 +4376,8 @@ type InputMediaVideo struct {
 func (i *InputMediaVideo) MediaType() string {
 	return MediaTypeVideo
 }
+
+func (i *InputMediaVideo) iInputMedia() {}
 
 func (i *InputMediaVideo) fileParameters() map[string]telegoapi.NamedReader {
 	fp := make(map[string]telegoapi.NamedReader)
@@ -4170,6 +4444,8 @@ func (i *InputMediaAnimation) MediaType() string {
 	return MediaTypeAnimation
 }
 
+func (i *InputMediaAnimation) iInputMedia() {}
+
 func (i *InputMediaAnimation) fileParameters() map[string]telegoapi.NamedReader {
 	fp := make(map[string]telegoapi.NamedReader)
 
@@ -4228,6 +4504,8 @@ func (i *InputMediaAudio) MediaType() string {
 	return MediaTypeAudio
 }
 
+func (i *InputMediaAudio) iInputMedia() {}
+
 func (i *InputMediaAudio) fileParameters() map[string]telegoapi.NamedReader {
 	fp := make(map[string]telegoapi.NamedReader)
 
@@ -4280,6 +4558,8 @@ type InputMediaDocument struct {
 func (i *InputMediaDocument) MediaType() string {
 	return MediaTypeDocument
 }
+
+func (i *InputMediaDocument) iInputMedia() {}
 
 func (i *InputMediaDocument) fileParameters() map[string]telegoapi.NamedReader {
 	fp := make(map[string]telegoapi.NamedReader)
@@ -4347,6 +4627,84 @@ func (i InputFile) MarshalJSON() ([]byte, error) {
 
 	return nil, errors.New("telego: file ID, URL and file are empty")
 }
+
+// InputPaidMedia - This object describes the paid media to be sent. Currently, it can be one of
+// InputPaidMediaPhoto (https://core.telegram.org/bots/api#inputpaidmediaphoto)
+// InputPaidMediaVideo (https://core.telegram.org/bots/api#inputpaidmediavideo)
+type InputPaidMedia interface {
+	MediaType() string
+	MediaFile() InputFile
+	// Disallow external implementations
+	iInputPaidMedia()
+}
+
+// InputPaidMediaPhoto - The paid media to send is a photo.
+type InputPaidMediaPhoto struct {
+	// Type - Type of the media, must be photo
+	Type string `json:"type"`
+
+	// Media - File to send. Pass a file_id to send a file that exists on the Telegram servers (recommended),
+	// pass an HTTP URL for Telegram to get a file from the Internet, or pass “attach://<file_attach_name>” to
+	// upload a new one using multipart/form-data under <file_attach_name> name. More information on Sending Files
+	// » (https://core.telegram.org/bots/api#sending-files)
+	Media InputFile `json:"media"`
+}
+
+// MediaType returns InputPaidMedia type
+func (m *InputPaidMediaPhoto) MediaType() string {
+	return PaidMediaTypePhoto
+}
+
+// MediaFile returns InputPaidMedia file
+func (m *InputPaidMediaPhoto) MediaFile() InputFile {
+	return m.Media
+}
+
+func (m *InputPaidMediaPhoto) iInputPaidMedia() {}
+
+// InputPaidMediaVideo - The paid media to send is a video.
+type InputPaidMediaVideo struct {
+	// Type - Type of the media, must be video
+	Type string `json:"type"`
+
+	// Media - File to send. Pass a file_id to send a file that exists on the Telegram servers (recommended),
+	// pass an HTTP URL for Telegram to get a file from the Internet, or pass “attach://<file_attach_name>” to
+	// upload a new one using multipart/form-data under <file_attach_name> name. More information on Sending Files
+	// » (https://core.telegram.org/bots/api#sending-files)
+	Media InputFile `json:"media"`
+
+	// Thumbnail - Optional. Thumbnail of the file sent; can be ignored if thumbnail generation for the file is
+	// supported server-side. The thumbnail should be in JPEG format and less than 200 kB in size. A thumbnail's
+	// width and height should not exceed 320. Ignored if the file is not uploaded using multipart/form-data.
+	// Thumbnails can't be reused and can be only uploaded as a new file, so you can pass
+	// “attach://<file_attach_name>” if the thumbnail was uploaded using multipart/form-data under
+	// <file_attach_name>. More information on Sending Files » (https://core.telegram.org/bots/api#sending-files)
+	Thumbnail *InputFile `json:"thumbnail,omitempty"`
+
+	// Width - Optional. Video width
+	Width int `json:"width,omitempty"`
+
+	// Height - Optional. Video height
+	Height int `json:"height,omitempty"`
+
+	// Duration - Optional. Video duration in seconds
+	Duration int `json:"duration,omitempty"`
+
+	// SupportsStreaming - Optional. Pass True if the uploaded video is suitable for streaming
+	SupportsStreaming bool `json:"supports_streaming,omitempty"`
+}
+
+// MediaType returns InputPaidMedia type
+func (m *InputPaidMediaVideo) MediaType() string {
+	return PaidMediaTypeVideo
+}
+
+// MediaFile returns InputPaidMedia file
+func (m *InputPaidMediaVideo) MediaFile() InputFile {
+	return m.Media
+}
+
+func (m *InputPaidMediaVideo) iInputPaidMedia() {}
 
 // Sticker - This object represents a sticker.
 type Sticker struct {
@@ -4558,6 +4916,8 @@ type InlineQueryResultsButton struct {
 // be public.
 type InlineQueryResult interface {
 	ResultType() string
+	// Disallow external implementations
+	iInlineQueryResult()
 }
 
 // InlineQueryResult types
@@ -4619,6 +4979,8 @@ func (i *InlineQueryResultArticle) ResultType() string {
 	return ResultTypeArticle
 }
 
+func (i *InlineQueryResultArticle) iInlineQueryResult() {}
+
 // InlineQueryResultPhoto - Represents a link to a photo. By default, this photo will be sent by the user
 // with optional caption. Alternatively, you can use input_message_content to send a message with the specified
 // content instead of the photo.
@@ -4673,6 +5035,8 @@ type InlineQueryResultPhoto struct {
 func (i *InlineQueryResultPhoto) ResultType() string {
 	return ResultTypePhoto
 }
+
+func (i *InlineQueryResultPhoto) iInlineQueryResult() {}
 
 // InlineQueryResultGif - Represents a link to an animated GIF file. By default, this animated GIF file will
 // be sent by the user with optional caption. Alternatively, you can use input_message_content to send a message
@@ -4732,6 +5096,8 @@ type InlineQueryResultGif struct {
 func (i *InlineQueryResultGif) ResultType() string {
 	return ResultTypeGif
 }
+
+func (i *InlineQueryResultGif) iInlineQueryResult() {}
 
 // ThumbMimeType types
 const (
@@ -4802,6 +5168,8 @@ func (i *InlineQueryResultMpeg4Gif) ResultType() string {
 	return ResultTypeMpeg4Gif
 }
 
+func (i *InlineQueryResultMpeg4Gif) iInlineQueryResult() {}
+
 // InlineQueryResultVideo - Represents a link to a page containing an embedded video player or a video file.
 // By default, this video file will be sent by the user with an optional caption. Alternatively, you can use
 // input_message_content to send a message with the specified content instead of the video.
@@ -4866,6 +5234,8 @@ func (i *InlineQueryResultVideo) ResultType() string {
 	return ResultTypeVideo
 }
 
+func (i *InlineQueryResultVideo) iInlineQueryResult() {}
+
 // InlineQueryResultAudio - Represents a link to an MP3 audio file. By default, this audio file will be sent
 // by the user. Alternatively, you can use input_message_content to send a message with the specified content
 // instead of the audio.
@@ -4912,6 +5282,8 @@ func (i *InlineQueryResultAudio) ResultType() string {
 	return ResultTypeAudio
 }
 
+func (i *InlineQueryResultAudio) iInlineQueryResult() {}
+
 // InlineQueryResultVoice - Represents a link to a voice recording in an .OGG container encoded with OPUS. By
 // default, this voice recording will be sent by the user. Alternatively, you can use input_message_content to
 // send a message with the specified content instead of the the voice message.
@@ -4954,6 +5326,8 @@ type InlineQueryResultVoice struct {
 func (i *InlineQueryResultVoice) ResultType() string {
 	return ResultTypeVoice
 }
+
+func (i *InlineQueryResultVoice) iInlineQueryResult() {}
 
 // InlineQueryResultDocument - Represents a link to a file. By default, this file will be sent by the user
 // with an optional caption. Alternatively, you can use input_message_content to send a message with the
@@ -5008,6 +5382,8 @@ type InlineQueryResultDocument struct {
 func (i *InlineQueryResultDocument) ResultType() string {
 	return ResultTypeDocument
 }
+
+func (i *InlineQueryResultDocument) iInlineQueryResult() {}
 
 // InlineQueryResultLocation - Represents a location on a map. By default, the location will be sent by the
 // user. Alternatively, you can use input_message_content to send a message with the specified content instead
@@ -5064,6 +5440,8 @@ type InlineQueryResultLocation struct {
 func (i *InlineQueryResultLocation) ResultType() string {
 	return ResultTypeLocation
 }
+
+func (i *InlineQueryResultLocation) iInlineQueryResult() {}
 
 // InlineQueryResultVenue - Represents a venue. By default, the venue will be sent by the user.
 // Alternatively, you can use input_message_content to send a message with the specified content instead of the
@@ -5123,6 +5501,8 @@ func (i *InlineQueryResultVenue) ResultType() string {
 	return ResultTypeVenue
 }
 
+func (i *InlineQueryResultVenue) iInlineQueryResult() {}
+
 // InlineQueryResultContact - Represents a contact with a phone number. By default, this contact will be sent
 // by the user. Alternatively, you can use input_message_content to send a message with the specified content
 // instead of the contact.
@@ -5168,6 +5548,8 @@ func (i *InlineQueryResultContact) ResultType() string {
 	return ResultTypeContact
 }
 
+func (i *InlineQueryResultContact) iInlineQueryResult() {}
+
 // InlineQueryResultGame - Represents a Game (https://core.telegram.org/bots/api#games).
 type InlineQueryResultGame struct {
 	// Type - Type of the result, must be game
@@ -5188,6 +5570,8 @@ type InlineQueryResultGame struct {
 func (i *InlineQueryResultGame) ResultType() string {
 	return ResultTypeGame
 }
+
+func (i *InlineQueryResultGame) iInlineQueryResult() {}
 
 // InlineQueryResultCachedPhoto - Represents a link to a photo stored on the Telegram servers. By default,
 // this photo will be sent by the user with an optional caption. Alternatively, you can use
@@ -5235,6 +5619,8 @@ func (i *InlineQueryResultCachedPhoto) ResultType() string {
 	return ResultTypePhoto
 }
 
+func (i *InlineQueryResultCachedPhoto) iInlineQueryResult() {}
+
 // InlineQueryResultCachedGif - Represents a link to an animated GIF file stored on the Telegram servers. By
 // default, this animated GIF file will be sent by the user with an optional caption. Alternatively, you can use
 // input_message_content to send a message with specified content instead of the animation.
@@ -5277,6 +5663,8 @@ type InlineQueryResultCachedGif struct {
 func (i *InlineQueryResultCachedGif) ResultType() string {
 	return ResultTypeGif
 }
+
+func (i *InlineQueryResultCachedGif) iInlineQueryResult() {}
 
 // InlineQueryResultCachedMpeg4Gif - Represents a link to a video animation (H.264/MPEG-4 AVC video without
 // sound) stored on the Telegram servers. By default, this animated MPEG-4 file will be sent by the user with an
@@ -5322,6 +5710,8 @@ func (i *InlineQueryResultCachedMpeg4Gif) ResultType() string {
 	return ResultTypeMpeg4Gif
 }
 
+func (i *InlineQueryResultCachedMpeg4Gif) iInlineQueryResult() {}
+
 // InlineQueryResultCachedSticker - Represents a link to a sticker stored on the Telegram servers. By
 // default, this sticker will be sent by the user. Alternatively, you can use input_message_content to send a
 // message with the specified content instead of the sticker.
@@ -5347,6 +5737,8 @@ type InlineQueryResultCachedSticker struct {
 func (i *InlineQueryResultCachedSticker) ResultType() string {
 	return ResultTypeSticker
 }
+
+func (i *InlineQueryResultCachedSticker) iInlineQueryResult() {}
 
 // InlineQueryResultCachedDocument - Represents a link to a file stored on the Telegram servers. By default,
 // this file will be sent by the user with an optional caption. Alternatively, you can use input_message_content
@@ -5390,6 +5782,8 @@ type InlineQueryResultCachedDocument struct {
 func (i *InlineQueryResultCachedDocument) ResultType() string {
 	return ResultTypeDocument
 }
+
+func (i *InlineQueryResultCachedDocument) iInlineQueryResult() {}
 
 // InlineQueryResultCachedVideo - Represents a link to a video file stored on the Telegram servers. By
 // default, this video file will be sent by the user with an optional caption. Alternatively, you can use
@@ -5437,6 +5831,8 @@ func (i *InlineQueryResultCachedVideo) ResultType() string {
 	return ResultTypeVideo
 }
 
+func (i *InlineQueryResultCachedVideo) iInlineQueryResult() {}
+
 // InlineQueryResultCachedVoice - Represents a link to a voice message stored on the Telegram servers. By
 // default, this voice message will be sent by the user. Alternatively, you can use input_message_content to
 // send a message with the specified content instead of the voice message.
@@ -5477,6 +5873,8 @@ func (i *InlineQueryResultCachedVoice) ResultType() string {
 	return ResultTypeVoice
 }
 
+func (i *InlineQueryResultCachedVoice) iInlineQueryResult() {}
+
 // InlineQueryResultCachedAudio - Represents a link to an MP3 audio file stored on the Telegram servers. By
 // default, this audio file will be sent by the user. Alternatively, you can use input_message_content to send a
 // message with the specified content instead of the audio.
@@ -5514,6 +5912,8 @@ func (i *InlineQueryResultCachedAudio) ResultType() string {
 	return ResultTypeAudio
 }
 
+func (i *InlineQueryResultCachedAudio) iInlineQueryResult() {}
+
 // InputMessageContent - This object represents the content of a message to be sent as a result of an inline
 // query. Telegram clients currently support the following 5 types:
 // InputTextMessageContent (https://core.telegram.org/bots/api#inputtextmessagecontent)
@@ -5523,6 +5923,8 @@ func (i *InlineQueryResultCachedAudio) ResultType() string {
 // InputInvoiceMessageContent (https://core.telegram.org/bots/api#inputinvoicemessagecontent)
 type InputMessageContent interface {
 	ContentType() string
+	// Disallow external implementations
+	iInputMessageContent()
 }
 
 // InputMessageContent types
@@ -5557,6 +5959,8 @@ func (i *InputTextMessageContent) ContentType() string {
 	return ContentTypeText
 }
 
+func (i *InputTextMessageContent) iInputMessageContent() {}
+
 // InputLocationMessageContent - Represents the content
 // (https://core.telegram.org/bots/api#inputmessagecontent) of a location message to be sent as the result of an
 // inline query.
@@ -5587,6 +5991,8 @@ type InputLocationMessageContent struct {
 func (i *InputLocationMessageContent) ContentType() string {
 	return ContentTypeLocation
 }
+
+func (i *InputLocationMessageContent) iInputMessageContent() {}
 
 // InputVenueMessageContent - Represents the content (https://core.telegram.org/bots/api#inputmessagecontent)
 // of a venue message to be sent as the result of an inline query.
@@ -5623,6 +6029,8 @@ func (i *InputVenueMessageContent) ContentType() string {
 	return ContentTypeVenue
 }
 
+func (i *InputVenueMessageContent) iInputMessageContent() {}
+
 // InputContactMessageContent - Represents the content
 // (https://core.telegram.org/bots/api#inputmessagecontent) of a contact message to be sent as the result of an
 // inline query.
@@ -5645,6 +6053,8 @@ type InputContactMessageContent struct {
 func (i *InputContactMessageContent) ContentType() string {
 	return ContentTypeContact
 }
+
+func (i *InputContactMessageContent) iInputMessageContent() {}
 
 // InputInvoiceMessageContent - Represents the content
 // (https://core.telegram.org/bots/api#inputmessagecontent) of an invoice message to be sent as the result of an
@@ -5737,6 +6147,8 @@ type InputInvoiceMessageContent struct {
 func (i *InputInvoiceMessageContent) ContentType() string {
 	return ContentTypeInvoice
 }
+
+func (i *InputInvoiceMessageContent) iInputMessageContent() {}
 
 // ChosenInlineResult - Represents a result (https://core.telegram.org/bots/api#inlinequeryresult) of an
 // inline query that was chosen by the user and sent to their chat partner.
@@ -5864,7 +6276,7 @@ type SuccessfulPayment struct {
 	// point for each currency (2 for the majority of currencies).
 	TotalAmount int `json:"total_amount"`
 
-	// InvoicePayload - Bot specified invoice payload
+	// InvoicePayload - Bot-specified invoice payload
 	InvoicePayload string `json:"invoice_payload"`
 
 	// ShippingOptionID - Optional. Identifier of the shipping option chosen by the user
@@ -5880,6 +6292,28 @@ type SuccessfulPayment struct {
 	ProviderPaymentChargeID string `json:"provider_payment_charge_id"`
 }
 
+// RefundedPayment - This object contains basic information about a refunded payment.
+type RefundedPayment struct {
+	// Currency - Three-letter ISO 4217 currency (https://core.telegram.org/bots/payments#supported-currencies)
+	// code, or “XTR” for payments in Telegram Stars (https://t.me/BotNews/90). Currently, always “XTR”
+	Currency string `json:"currency"`
+
+	// TotalAmount - Total refunded price in the smallest units of the currency (integer, not float/double). For
+	// example, for a price of US$ 1.45, total_amount = 145. See the exp parameter in currencies.json
+	// (https://core.telegram.org/bots/payments/currencies.json), it shows the number of digits past the decimal
+	// point for each currency (2 for the majority of currencies).
+	TotalAmount int `json:"total_amount"`
+
+	// InvoicePayload - Bot-specified invoice payload
+	InvoicePayload string `json:"invoice_payload"`
+
+	// TelegramPaymentChargeID - Telegram payment identifier
+	TelegramPaymentChargeID string `json:"telegram_payment_charge_id"`
+
+	// ProviderPaymentChargeID - Optional. Provider payment identifier
+	ProviderPaymentChargeID string `json:"provider_payment_charge_id,omitempty"`
+}
+
 // ShippingQuery - This object contains information about an incoming shipping query.
 type ShippingQuery struct {
 	// ID - Unique query identifier
@@ -5888,7 +6322,7 @@ type ShippingQuery struct {
 	// From - User who sent the query
 	From User `json:"from"`
 
-	// InvoicePayload - Bot specified invoice payload
+	// InvoicePayload - Bot-specified invoice payload
 	InvoicePayload string `json:"invoice_payload"`
 
 	// ShippingAddress - User specified shipping address
@@ -5913,7 +6347,7 @@ type PreCheckoutQuery struct {
 	// point for each currency (2 for the majority of currencies).
 	TotalAmount int `json:"total_amount"`
 
-	// InvoicePayload - Bot specified invoice payload
+	// InvoicePayload - Bot-specified invoice payload
 	InvoicePayload string `json:"invoice_payload"`
 
 	// ShippingOptionID - Optional. Identifier of the shipping option chosen by the user
@@ -5921,6 +6355,231 @@ type PreCheckoutQuery struct {
 
 	// OrderInfo - Optional. Order information provided by the user
 	OrderInfo *OrderInfo `json:"order_info,omitempty"`
+}
+
+// RevenueWithdrawalState - This object describes the state of a revenue withdrawal operation. Currently, it
+// can be one of
+// RevenueWithdrawalStatePending (https://core.telegram.org/bots/api#revenuewithdrawalstatepending)
+// RevenueWithdrawalStateSucceeded (https://core.telegram.org/bots/api#revenuewithdrawalstatesucceeded)
+// RevenueWithdrawalStateFailed (https://core.telegram.org/bots/api#revenuewithdrawalstatefailed)
+type RevenueWithdrawalState interface {
+	WithdrawalState() string
+	// Disallow external implementations
+	iRevenueWithdrawalState()
+}
+
+// Revenue withdrawal state types
+const (
+	WithdrawalStatePending   = "pending"
+	WithdrawalStateSucceeded = "succeeded"
+	WithdrawalStateFailed    = "failed"
+)
+
+// RevenueWithdrawalStatePending - The withdrawal is in progress.
+type RevenueWithdrawalStatePending struct {
+	// Type - Type of the state, always “pending”
+	Type string `json:"type"`
+}
+
+// WithdrawalState returns RevenueWithdrawalState type
+func (r *RevenueWithdrawalStatePending) WithdrawalState() string {
+	return WithdrawalStatePending
+}
+
+func (r *RevenueWithdrawalStatePending) iRevenueWithdrawalState() {}
+
+// RevenueWithdrawalStateSucceeded - The withdrawal succeeded.
+type RevenueWithdrawalStateSucceeded struct {
+	// Type - Type of the state, always “succeeded”
+	Type string `json:"type"`
+
+	// Date - Date the withdrawal was completed in Unix time
+	Date int64 `json:"date"`
+
+	// URL - An HTTPS URL that can be used to see transaction details
+	URL string `json:"url"`
+}
+
+// WithdrawalState returns RevenueWithdrawalState type
+func (r *RevenueWithdrawalStateSucceeded) WithdrawalState() string {
+	return WithdrawalStateSucceeded
+}
+
+func (r *RevenueWithdrawalStateSucceeded) iRevenueWithdrawalState() {}
+
+// RevenueWithdrawalStateFailed - The withdrawal failed and the transaction was refunded.
+type RevenueWithdrawalStateFailed struct {
+	// Type - Type of the state, always “failed”
+	Type string `json:"type"`
+}
+
+// WithdrawalState returns RevenueWithdrawalState type
+func (r *RevenueWithdrawalStateFailed) WithdrawalState() string {
+	return WithdrawalStateFailed
+}
+
+func (r *RevenueWithdrawalStateFailed) iRevenueWithdrawalState() {}
+
+// TransactionPartner - This object describes the source of a transaction, or its recipient for outgoing
+// transactions. Currently, it can be one of
+// TransactionPartnerUser (https://core.telegram.org/bots/api#transactionpartneruser)
+// TransactionPartnerFragment (https://core.telegram.org/bots/api#transactionpartnerfragment)
+// TransactionPartnerTelegramAds (https://core.telegram.org/bots/api#transactionpartnertelegramads)
+// TransactionPartnerOther (https://core.telegram.org/bots/api#transactionpartnerother)
+type TransactionPartner interface {
+	PartnerType() string
+	// Disallow external implementations
+	iTransactionPartner()
+}
+
+// Transaction partner types
+const (
+	PartnerTypeUser        = "user"
+	PartnerTypeFragment    = "fragment"
+	PartnerTypeTelegramAds = "telegram_ads"
+	PartnerTypeOther       = "other"
+)
+
+// TransactionPartnerUser - Describes a transaction with a user.
+type TransactionPartnerUser struct {
+	// Type - Type of the transaction partner, always “user”
+	Type string `json:"type"`
+
+	// User - Information about the user
+	User User `json:"user"`
+
+	// InvoicePayload - Optional. Bot-specified invoice payload
+	InvoicePayload string `json:"invoice_payload,omitempty"`
+}
+
+// PartnerType returns TransactionPartner type
+func (p *TransactionPartnerUser) PartnerType() string {
+	return PartnerTypeUser
+}
+
+func (p *TransactionPartnerUser) iTransactionPartner() {}
+
+// TransactionPartnerFragment - Describes a withdrawal transaction with Fragment.
+type TransactionPartnerFragment struct {
+	// Type - Type of the transaction partner, always “fragment”
+	Type string `json:"type"`
+
+	// WithdrawalState - Optional. State of the transaction if the transaction is outgoing
+	WithdrawalState RevenueWithdrawalState `json:"withdrawal_state,omitempty"`
+}
+
+// PartnerType returns TransactionPartner type
+func (p *TransactionPartnerFragment) PartnerType() string {
+	return PartnerTypeFragment
+}
+
+func (p *TransactionPartnerFragment) iTransactionPartner() {}
+
+// TransactionPartnerTelegramAds - Describes a withdrawal transaction to the Telegram Ads platform.
+type TransactionPartnerTelegramAds struct {
+	// Type - Type of the transaction partner, always “telegram_ads”
+	Type string `json:"type"`
+}
+
+// PartnerType returns TransactionPartner type
+func (p *TransactionPartnerTelegramAds) PartnerType() string {
+	return PartnerTypeTelegramAds
+}
+
+func (p *TransactionPartnerTelegramAds) iTransactionPartner() {}
+
+// TransactionPartnerOther - Describes a transaction with an unknown source or recipient.
+type TransactionPartnerOther struct {
+	// Type - Type of the transaction partner, always “other”
+	Type string `json:"type"`
+}
+
+// PartnerType returns TransactionPartner type
+func (p *TransactionPartnerOther) PartnerType() string {
+	return PartnerTypeOther
+}
+
+func (p *TransactionPartnerOther) iTransactionPartner() {}
+
+// StarTransaction - Describes a Telegram Star transaction.
+type StarTransaction struct {
+	// ID - Unique identifier of the transaction. Coincides with the identifier of the original transaction for
+	// refund transactions. Coincides with SuccessfulPayment.telegram_payment_charge_id for successful incoming
+	// payments from users.
+	ID string `json:"id"`
+
+	// Amount - Number of Telegram Stars transferred by the transaction
+	Amount int `json:"amount"`
+
+	// Date - Date the transaction was created in Unix time
+	Date int64 `json:"date"`
+
+	// Source - Optional. Source of an incoming transaction (e.g., a user purchasing goods or services, Fragment
+	// refunding a failed withdrawal). Only for incoming transactions
+	Source TransactionPartner `json:"source,omitempty"`
+
+	// Receiver - Optional. Receiver of an outgoing transaction (e.g., a user for a purchase refund, Fragment
+	// for a withdrawal). Only for outgoing transactions
+	Receiver TransactionPartner `json:"receiver,omitempty"`
+}
+
+// UnmarshalJSON converts JSON to Chat
+func (t *StarTransaction) UnmarshalJSON(data []byte) error {
+	parser := json.ParserPoll.Get()
+	defer json.ParserPoll.Put(parser)
+
+	value, err := parser.ParseBytes(data)
+	if err != nil {
+		return err
+	}
+
+	type uStarTransaction StarTransaction
+	var ut uStarTransaction
+
+	if value.Exists("source") {
+		partnerType := string(value.GetStringBytes("source", "type"))
+		switch partnerType {
+		case PartnerTypeUser:
+			ut.Source = &TransactionPartnerUser{}
+		case PartnerTypeFragment:
+			ut.Source = &TransactionPartnerFragment{}
+		case PartnerTypeTelegramAds:
+			ut.Source = &TransactionPartnerTelegramAds{}
+		case PartnerTypeOther:
+			ut.Source = &TransactionPartnerOther{}
+		default:
+			return fmt.Errorf("unknown source partner type: %s", partnerType)
+		}
+	}
+
+	if value.Exists("receiver") {
+		partnerType := string(value.GetStringBytes("receiver", "type"))
+		switch partnerType {
+		case PartnerTypeUser:
+			ut.Receiver = &TransactionPartnerUser{}
+		case PartnerTypeFragment:
+			ut.Receiver = &TransactionPartnerFragment{}
+		case PartnerTypeTelegramAds:
+			ut.Receiver = &TransactionPartnerTelegramAds{}
+		case PartnerTypeOther:
+			ut.Receiver = &TransactionPartnerOther{}
+		default:
+			return fmt.Errorf("unknown receiver partner type: %s", partnerType)
+		}
+	}
+
+	if err = json.Unmarshal(data, &ut); err != nil {
+		return err
+	}
+	*t = StarTransaction(ut)
+
+	return nil
+}
+
+// StarTransactions - Contains a list of Telegram Star transactions.
+type StarTransactions struct {
+	// Transactions - The list of transactions
+	Transactions []StarTransaction `json:"transactions"`
 }
 
 // PassportData - Describes Telegram Passport data shared with the bot by the user.
@@ -6054,6 +6713,8 @@ type EncryptedCredentials struct {
 // PassportElementErrorUnspecified (https://core.telegram.org/bots/api#passportelementerrorunspecified)
 type PassportElementError interface {
 	ErrorSource() string
+	// Disallow external implementations
+	iPassportElementError()
 }
 
 // PassportElementError sources
@@ -6094,6 +6755,8 @@ func (p *PassportElementErrorDataField) ErrorSource() string {
 	return ErrorSourceDataField
 }
 
+func (p *PassportElementErrorDataField) iPassportElementError() {}
+
 // PassportElementErrorFrontSide - Represents an issue with the front side of a document. The error is
 // considered resolved when the file with the front side of the document changes.
 type PassportElementErrorFrontSide struct {
@@ -6115,6 +6778,8 @@ type PassportElementErrorFrontSide struct {
 func (p *PassportElementErrorFrontSide) ErrorSource() string {
 	return ErrorSourceFrontSide
 }
+
+func (p *PassportElementErrorFrontSide) iPassportElementError() {}
 
 // PassportElementErrorReverseSide - Represents an issue with the reverse side of a document. The error is
 // considered resolved when the file with reverse side of the document changes.
@@ -6138,6 +6803,8 @@ func (p *PassportElementErrorReverseSide) ErrorSource() string {
 	return ErrorSourceReverseSide
 }
 
+func (p *PassportElementErrorReverseSide) iPassportElementError() {}
+
 // PassportElementErrorSelfie - Represents an issue with the selfie with a document. The error is considered
 // resolved when the file with the selfie changes.
 type PassportElementErrorSelfie struct {
@@ -6159,6 +6826,8 @@ type PassportElementErrorSelfie struct {
 func (p *PassportElementErrorSelfie) ErrorSource() string {
 	return ErrorSourceSelfie
 }
+
+func (p *PassportElementErrorSelfie) iPassportElementError() {}
 
 // PassportElementErrorFile - Represents an issue with a document scan. The error is considered resolved when
 // the file with the document scan changes.
@@ -6182,6 +6851,8 @@ func (p *PassportElementErrorFile) ErrorSource() string {
 	return ErrorSourceFile
 }
 
+func (p *PassportElementErrorFile) iPassportElementError() {}
+
 // PassportElementErrorFiles - Represents an issue with a list of scans. The error is considered resolved
 // when the list of files containing the scans changes.
 type PassportElementErrorFiles struct {
@@ -6203,6 +6874,8 @@ type PassportElementErrorFiles struct {
 func (p *PassportElementErrorFiles) ErrorSource() string {
 	return ErrorSourceFiles
 }
+
+func (p *PassportElementErrorFiles) iPassportElementError() {}
 
 // PassportElementErrorTranslationFile - Represents an issue with one of the files that constitute the
 // translation of a document. The error is considered resolved when the file changes.
@@ -6227,6 +6900,8 @@ func (p *PassportElementErrorTranslationFile) ErrorSource() string {
 	return ErrorSourceTranslationFile
 }
 
+func (p *PassportElementErrorTranslationFile) iPassportElementError() {}
+
 // PassportElementErrorTranslationFiles - Represents an issue with the translated version of a document. The
 // error is considered resolved when a file with the document translation change.
 type PassportElementErrorTranslationFiles struct {
@@ -6250,6 +6925,8 @@ func (p *PassportElementErrorTranslationFiles) ErrorSource() string {
 	return ErrorSourceTranslationFiles
 }
 
+func (p *PassportElementErrorTranslationFiles) iPassportElementError() {}
+
 // PassportElementErrorUnspecified - Represents an issue in an unspecified place. The error is considered
 // resolved when new data is added.
 type PassportElementErrorUnspecified struct {
@@ -6270,6 +6947,8 @@ type PassportElementErrorUnspecified struct {
 func (p *PassportElementErrorUnspecified) ErrorSource() string {
 	return ErrorSourceUnspecified
 }
+
+func (p *PassportElementErrorUnspecified) iPassportElementError() {}
 
 // Game - This object represents a game. Use BotFather to create and edit games, their short names will act
 // as unique identifiers.
