@@ -1080,8 +1080,13 @@ func (b *Bot) SendVideoNote(params *SendVideoNoteParams) (*Message, error) {
 
 // SendPaidMediaParams - Represents parameters of sendPaidMedia method.
 type SendPaidMediaParams struct {
+	// BusinessConnectionID - Optional. Unique identifier of the business connection on behalf of which the
+	// message will be sent
+	BusinessConnectionID string `json:"business_connection_id,omitempty"`
+
 	// ChatID - Unique identifier for the target chat or username of the target channel (in the format
-	// @channel_username)
+	// @channel_username). If the chat is a channel, all Telegram Star proceeds from this media will be credited to
+	// the chat's balance. Otherwise, they will be credited to the bot's balance.
 	ChatID ChatID `json:"chat_id"`
 
 	// StarCount - The number of Telegram Stars that must be paid to buy access to the media
@@ -1121,7 +1126,7 @@ type SendPaidMediaParams struct {
 	ReplyMarkup ReplyMarkup `json:"reply_markup,omitempty"`
 }
 
-// SendPaidMedia - Use this method to send paid media to channel chats. On success, the sent Message
+// SendPaidMedia - Use this method to send paid media. On success, the sent Message
 // (https://core.telegram.org/bots/api#message) is returned.
 func (b *Bot) SendPaidMedia(params *SendPaidMediaParams) (*Message, error) {
 	var message *Message
@@ -1618,7 +1623,8 @@ type SetMessageReactionParams struct {
 
 	// Reaction - Optional. A JSON-serialized list of reaction types to set on the message. Currently, as
 	// non-premium users, bots can set up to one reaction per message. A custom emoji reaction can be used if it is
-	// either already present on the message or explicitly allowed by chat administrators.
+	// either already present on the message or explicitly allowed by chat administrators. Paid reactions can't be
+	// used by bots.
 	Reaction []ReactionType `json:"reaction,omitempty"`
 
 	// IsBig - Optional. Pass True to set the reaction with a big animation
@@ -1627,7 +1633,7 @@ type SetMessageReactionParams struct {
 
 // SetMessageReaction - Use this method to change the chosen reactions on a message. Service messages can't
 // be reacted to. Automatically forwarded messages from a channel to its discussion group have the same
-// available reactions as messages in the channel. Returns True on success.
+// available reactions as messages in the channel. Bots can't use paid reactions. Returns True on success.
 func (b *Bot) SetMessageReaction(params *SetMessageReactionParams) error {
 	err := b.performRequest("setMessageReaction", params)
 	if err != nil {
@@ -2047,6 +2053,68 @@ func (b *Bot) EditChatInviteLink(params *EditChatInviteLinkParams) (*ChatInviteL
 	return chatInviteLink, nil
 }
 
+// CreateChatSubscriptionInviteLinkParams - Represents parameters of createChatSubscriptionInviteLink method.
+type CreateChatSubscriptionInviteLinkParams struct {
+	// ChatID - Unique identifier for the target channel chat or username of the target channel (in the format
+	// @channel_username)
+	ChatID ChatID `json:"chat_id"`
+
+	// Name - Optional. Invite link name; 0-32 characters
+	Name string `json:"name,omitempty"`
+
+	// SubscriptionPeriod - The number of seconds the subscription will be active for before the next payment.
+	// Currently, it must always be 2592000 (30 days).
+	SubscriptionPeriod int64 `json:"subscription_period"`
+
+	// SubscriptionPrice - The amount of Telegram Stars a user must pay initially and after each subsequent
+	// subscription period to be a member of the chat; 1-2500
+	SubscriptionPrice int `json:"subscription_price"`
+}
+
+// CreateChatSubscriptionInviteLink - Use this method to create a subscription invite link
+// (https://telegram.org/blog/superchannels-star-reactions-subscriptions#star-subscriptions) for a channel chat.
+// The bot must have the can_invite_users administrator rights. The link can be edited using the method
+// editChatSubscriptionInviteLink (https://core.telegram.org/bots/api#editchatsubscriptioninvitelink) or revoked
+// using the method revokeChatInviteLink (https://core.telegram.org/bots/api#revokechatinvitelink). Returns the
+// new invite link as a ChatInviteLink (https://core.telegram.org/bots/api#chatinvitelink) object.
+func (b *Bot) CreateChatSubscriptionInviteLink(
+	params *CreateChatSubscriptionInviteLinkParams,
+) (*ChatInviteLink, error) {
+	var chatInviteLink *ChatInviteLink
+	err := b.performRequest("createChatSubscriptionInviteLink", params, &chatInviteLink)
+	if err != nil {
+		return nil, fmt.Errorf("telego: createChatSubscriptionInviteLink(): %w", err)
+	}
+
+	return chatInviteLink, nil
+}
+
+// EditChatSubscriptionInviteLinkParams - Represents parameters of editChatSubscriptionInviteLink method.
+type EditChatSubscriptionInviteLinkParams struct {
+	// ChatID - Unique identifier for the target chat or username of the target channel (in the format
+	// @channel_username)
+	ChatID ChatID `json:"chat_id"`
+
+	// InviteLink - The invite link to edit
+	InviteLink string `json:"invite_link"`
+
+	// Name - Optional. Invite link name; 0-32 characters
+	Name string `json:"name,omitempty"`
+}
+
+// EditChatSubscriptionInviteLink - Use this method to edit a subscription invite link created by the bot.
+// The bot must have the can_invite_users administrator rights. Returns the edited invite link as a
+// ChatInviteLink (https://core.telegram.org/bots/api#chatinvitelink) object.
+func (b *Bot) EditChatSubscriptionInviteLink(params *EditChatSubscriptionInviteLinkParams) (*ChatInviteLink, error) {
+	var chatInviteLink *ChatInviteLink
+	err := b.performRequest("editChatSubscriptionInviteLink", params, &chatInviteLink)
+	if err != nil {
+		return nil, fmt.Errorf("telego: editChatSubscriptionInviteLink(): %w", err)
+	}
+
+	return chatInviteLink, nil
+}
+
 // RevokeChatInviteLinkParams - Represents parameters of revokeChatInviteLink method.
 type RevokeChatInviteLinkParams struct {
 	// ChatID - Unique identifier of the target chat or username of the target channel (in the format
@@ -2206,6 +2274,10 @@ func (b *Bot) SetChatDescription(params *SetChatDescriptionParams) error {
 
 // PinChatMessageParams - Represents parameters of pinChatMessage method.
 type PinChatMessageParams struct {
+	// BusinessConnectionID - Optional. Unique identifier of the business connection on behalf of which the
+	// message will be pinned
+	BusinessConnectionID string `json:"business_connection_id,omitempty"`
+
 	// ChatID - Unique identifier for the target chat or username of the target channel (in the format
 	// @channel_username)
 	ChatID ChatID `json:"chat_id"`
@@ -2233,12 +2305,16 @@ func (b *Bot) PinChatMessage(params *PinChatMessageParams) error {
 
 // UnpinChatMessageParams - Represents parameters of unpinChatMessage method.
 type UnpinChatMessageParams struct {
+	// BusinessConnectionID - Optional. Unique identifier of the business connection on behalf of which the
+	// message will be unpinned
+	BusinessConnectionID string `json:"business_connection_id,omitempty"`
+
 	// ChatID - Unique identifier for the target chat or username of the target channel (in the format
 	// @channel_username)
 	ChatID ChatID `json:"chat_id"`
 
-	// MessageID - Optional. Identifier of a message to unpin. If not specified, the most recent pinned message
-	// (by sending date) will be unpinned.
+	// MessageID - Optional. Identifier of the message to unpin. Required if business_connection_id is
+	// specified. If not specified, the most recent pinned message (by sending date) will be unpinned.
 	MessageID int `json:"message_id,omitempty"`
 }
 
@@ -2485,8 +2561,8 @@ type EditForumTopicParams struct {
 }
 
 // EditForumTopic - Use this method to edit name and icon of a topic in a forum supergroup chat. The bot must
-// be an administrator in the chat for this to work and must have can_manage_topics administrator rights, unless
-// it is the creator of the topic. Returns True on success.
+// be an administrator in the chat for this to work and must have the can_manage_topics administrator rights,
+// unless it is the creator of the topic. Returns True on success.
 func (b *Bot) EditForumTopic(params *EditForumTopicParams) error {
 	err := b.performRequest("editForumTopic", params)
 	if err != nil {
@@ -2595,7 +2671,7 @@ type EditGeneralForumTopicParams struct {
 }
 
 // EditGeneralForumTopic - Use this method to edit the name of the 'General' topic in a forum supergroup
-// chat. The bot must be an administrator in the chat for this to work and must have can_manage_topics
+// chat. The bot must be an administrator in the chat for this to work and must have the can_manage_topics
 // administrator rights. Returns True on success.
 func (b *Bot) EditGeneralForumTopic(params *EditGeneralForumTopicParams) error {
 	err := b.performRequest("editGeneralForumTopic", params)
@@ -3831,16 +3907,16 @@ type SetStickerSetThumbnailParams struct {
 
 	// Thumbnail - Optional. A .WEBP or .PNG image with the thumbnail, must be up to 128 kilobytes in size and
 	// have a width and height of exactly 100px, or a .TGS animation with a thumbnail up to 32 kilobytes in size
-	// (see https://core.telegram.org/stickers#animated-sticker-requirements
-	// (https://core.telegram.org/stickers#animated-sticker-requirements) for animated sticker technical
-	// requirements), or a WEBM video with the thumbnail up to 32 kilobytes in size; see
-	// https://core.telegram.org/stickers#video-sticker-requirements
-	// (https://core.telegram.org/stickers#video-sticker-requirements) for video sticker technical requirements.
-	// Pass a file_id as a String to send a file that already exists on the Telegram servers, pass an HTTP URL as a
-	// String for Telegram to get a file from the Internet, or upload a new one using multipart/form-data. More
-	// information on Sending Files » (https://core.telegram.org/bots/api#sending-files). Animated and video
-	// sticker set thumbnails can't be uploaded via HTTP URL. If omitted, then the thumbnail is dropped and the
-	// first sticker is used as the thumbnail.
+	// (see https://core.telegram.org/stickers#animation-requirements
+	// (https://core.telegram.org/stickers#animation-requirements) for animated sticker technical requirements), or
+	// a WEBM video with the thumbnail up to 32 kilobytes in size; see
+	// https://core.telegram.org/stickers#video-requirements (https://core.telegram.org/stickers#video-requirements)
+	// for video sticker technical requirements. Pass a file_id as a String to send a file that already exists on
+	// the Telegram servers, pass an HTTP URL as a String for Telegram to get a file from the Internet, or upload a
+	// new one using multipart/form-data. More information on Sending Files »
+	// (https://core.telegram.org/bots/api#sending-files). Animated and video sticker set thumbnails can't be
+	// uploaded via HTTP URL. If omitted, then the thumbnail is dropped and the first sticker is used as the
+	// thumbnail.
 	Thumbnail *InputFile `json:"thumbnail,omitempty"`
 
 	// Format - Format of the thumbnail, must be one of “static” for a .WEBP or .PNG image, “animated”

@@ -966,6 +966,12 @@ func (p *SendVideoNoteParams) WithReplyMarkup(replyMarkup ReplyMarkup) *SendVide
 	return p
 }
 
+// WithBusinessConnectionID adds business connection ID parameter
+func (p *SendPaidMediaParams) WithBusinessConnectionID(businessConnectionID string) *SendPaidMediaParams {
+	p.BusinessConnectionID = businessConnectionID
+	return p
+}
+
 // WithChatID adds chat ID parameter
 func (p *SendPaidMediaParams) WithChatID(chatID ChatID) *SendPaidMediaParams {
 	p.ChatID = chatID
@@ -1790,6 +1796,43 @@ func (p *EditChatInviteLinkParams) WithCreatesJoinRequest() *EditChatInviteLinkP
 }
 
 // WithChatID adds chat ID parameter
+func (p *CreateChatSubscriptionInviteLinkParams) WithChatID(chatID ChatID) *CreateChatSubscriptionInviteLinkParams {
+	p.ChatID = chatID
+	return p
+}
+
+// WithName adds name parameter
+func (p *CreateChatSubscriptionInviteLinkParams) WithName(name string) *CreateChatSubscriptionInviteLinkParams {
+	p.Name = name
+	return p
+}
+
+// WithSubscriptionPrice adds subscription price parameter
+func (p *CreateChatSubscriptionInviteLinkParams) WithSubscriptionPrice(subscriptionPrice int,
+) *CreateChatSubscriptionInviteLinkParams {
+	p.SubscriptionPrice = subscriptionPrice
+	return p
+}
+
+// WithChatID adds chat ID parameter
+func (p *EditChatSubscriptionInviteLinkParams) WithChatID(chatID ChatID) *EditChatSubscriptionInviteLinkParams {
+	p.ChatID = chatID
+	return p
+}
+
+// WithInviteLink adds invite link parameter
+func (p *EditChatSubscriptionInviteLinkParams) WithInviteLink(inviteLink string) *EditChatSubscriptionInviteLinkParams {
+	p.InviteLink = inviteLink
+	return p
+}
+
+// WithName adds name parameter
+func (p *EditChatSubscriptionInviteLinkParams) WithName(name string) *EditChatSubscriptionInviteLinkParams {
+	p.Name = name
+	return p
+}
+
+// WithChatID adds chat ID parameter
 func (p *RevokeChatInviteLinkParams) WithChatID(chatID ChatID) *RevokeChatInviteLinkParams {
 	p.ChatID = chatID
 	return p
@@ -1855,6 +1898,12 @@ func (p *SetChatDescriptionParams) WithDescription(description string) *SetChatD
 	return p
 }
 
+// WithBusinessConnectionID adds business connection ID parameter
+func (p *PinChatMessageParams) WithBusinessConnectionID(businessConnectionID string) *PinChatMessageParams {
+	p.BusinessConnectionID = businessConnectionID
+	return p
+}
+
 // WithChatID adds chat ID parameter
 func (p *PinChatMessageParams) WithChatID(chatID ChatID) *PinChatMessageParams {
 	p.ChatID = chatID
@@ -1870,6 +1919,12 @@ func (p *PinChatMessageParams) WithMessageID(messageID int) *PinChatMessageParam
 // WithDisableNotification adds disable notification parameter
 func (p *PinChatMessageParams) WithDisableNotification() *PinChatMessageParams {
 	p.DisableNotification = true
+	return p
+}
+
+// WithBusinessConnectionID adds business connection ID parameter
+func (p *UnpinChatMessageParams) WithBusinessConnectionID(businessConnectionID string) *UnpinChatMessageParams {
+	p.BusinessConnectionID = businessConnectionID
 	return p
 }
 

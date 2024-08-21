@@ -171,14 +171,15 @@ func parseCurrentTypes(types string) map[string][]string {
 				}
 			}
 
-			end := i + 1
+			end := i
 			for ; ; end++ {
 				if end >= len(lines) {
 					end = -1
 					break
 				}
 
-				if lines[end] == "}" {
+				if lines[end] == "}" ||
+					(strings.HasPrefix(lines[end], "func (") && strings.HasSuffix(lines[end], "() {}")) {
 					break
 				}
 			}
@@ -196,8 +197,8 @@ func parseCurrentTypes(types string) map[string][]string {
 		}
 	}
 
-	logInfo("Const count: %d", constCount)
-	logInfo("Func & interface count: %d", funcOrInterfaceCount)
+	logInfof("Const count: %d", constCount)
+	logInfof("Func & interface count: %d", funcOrInterfaceCount)
 
 	return additional
 }
@@ -207,7 +208,7 @@ func writeTypes(file *os.File, types tgTypes, currentTypes string) {
 
 	data := strings.Builder{}
 
-	logInfo("Types: %d", len(types))
+	logInfof("Types: %d", len(types))
 
 	data.WriteString(`package telego
 
@@ -262,7 +263,7 @@ import (
 		}
 	}
 
-	logInfo("Type fields: %d", fieldsCount)
+	logInfof("Type fields: %d", fieldsCount)
 
 	_, err := file.WriteString(uppercaseWords(data.String()))
 	exitOnErr(err)
@@ -274,7 +275,8 @@ func fieldSpecialCases(field *tgTypeField, typeName string) {
 	}
 
 	if (strings.Contains(field.description, "64-bit integer") ||
-		strings.Contains(field.description, "64 bit integer")) && field.typ == "int" {
+		strings.Contains(field.description, "64 bit integer") ||
+		strings.Contains(field.description, "number of seconds")) && field.typ == "int" {
 		field.typ = "int64"
 	}
 
