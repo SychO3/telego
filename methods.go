@@ -1089,11 +1089,15 @@ type SendPaidMediaParams struct {
 	// the chat's balance. Otherwise, they will be credited to the bot's balance.
 	ChatID ChatID `json:"chat_id"`
 
-	// StarCount - The number of Telegram Stars that must be paid to buy access to the media
+	// StarCount - The number of Telegram Stars that must be paid to buy access to the media; 1-2500
 	StarCount int `json:"star_count"`
 
 	// Media - A JSON-serialized array describing the media to be sent; up to 10 items
 	Media []InputPaidMedia `json:"media"`
+
+	// Payload - Optional. Bot-defined paid media payload, 0-128 bytes. This will not be displayed to the user,
+	// use it for your internal processes.
+	Payload string `json:"payload,omitempty"`
 
 	// Caption - Optional. Media caption, 0-1024 characters after entities parsing
 	Caption string `json:"caption,omitempty"`
@@ -3801,6 +3805,18 @@ type ReplaceStickerInSetParams struct {
 	Sticker InputSticker `json:"sticker"`
 }
 
+func (p *ReplaceStickerInSetParams) fileParameters() map[string]ta.NamedReader {
+	file := p.Sticker.Sticker.File
+	if isNil(file) {
+		return map[string]ta.NamedReader{}
+	}
+
+	p.Sticker.Sticker.needAttach = true
+	return map[string]ta.NamedReader{
+		file.Name(): file,
+	}
+}
+
 // ReplaceStickerInSet - Use this method to replace an existing sticker in a sticker set with a new one. The
 // method is equivalent to calling deleteStickerFromSet
 // (https://core.telegram.org/bots/api#deletestickerfromset), then addStickerToSet
@@ -4059,8 +4075,8 @@ type SendInvoiceParams struct {
 	// Description - Product description, 1-255 characters
 	Description string `json:"description"`
 
-	// Payload - Bot-defined invoice payload, 1-128 bytes. This will not be displayed to the user, use for your
-	// internal processes.
+	// Payload - Bot-defined invoice payload, 1-128 bytes. This will not be displayed to the user, use it for
+	// your internal processes.
 	Payload string `json:"payload"`
 
 	// ProviderToken - Optional. Payment provider token, obtained via @BotFather (https://t.me/botfather). Pass
@@ -4181,8 +4197,8 @@ type CreateInvoiceLinkParams struct {
 	// Description - Product description, 1-255 characters
 	Description string `json:"description"`
 
-	// Payload - Bot-defined invoice payload, 1-128 bytes. This will not be displayed to the user, use for your
-	// internal processes.
+	// Payload - Bot-defined invoice payload, 1-128 bytes. This will not be displayed to the user, use it for
+	// your internal processes.
 	Payload string `json:"payload"`
 
 	// ProviderToken - Optional. Payment provider token, obtained via @BotFather (https://t.me/botfather). Pass
